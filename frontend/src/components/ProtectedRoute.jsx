@@ -13,9 +13,12 @@ const ProtectedRoute = ({ children, allowedRoles, requireSC = false }) => {
         return <Navigate to="/student/dashboard" replace />;
     }
 
-    if (allowedRoles && !allowedRoles.includes(user.role)) {
-        localStorage.clear();
-        return <Navigate to="/login" replace />;
+    // Force college selection for Students
+    const isMissingCollege = user.role === 'STUDENT' && !user.collegeId && user.collegeName === 'Not specified';
+    
+    // Redirect to profile if missing college, but allow them to stay on the profile page itself
+    if (isMissingCollege && window.location.pathname !== '/student/profile') {
+        return <Navigate to="/student/profile" replace />;
     }
 
     return children;

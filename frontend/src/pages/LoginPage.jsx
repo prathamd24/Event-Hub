@@ -24,10 +24,11 @@ export default function LoginPage() {
 
             if (res.data.isNewUser) {
                 toast(`Welcome ${dbUser.name}! Please complete your profile.`, 'success');
+                navigate('/student/profile');
             } else {
                 toast(`Welcome back, ${dbUser.name}!`, 'success');
+                navigate('/');
             }
-            navigate('/');
         } catch (err) {
             console.error('Google Sign-In error:', err);
             handleAuthError(err);

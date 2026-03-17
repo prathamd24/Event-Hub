@@ -103,12 +103,22 @@ export default function StudentProfile() {
                     <h1 className="text-2xl font-bold text-white mb-2">My Profile</h1>
                     <p className="text-slate-400 text-sm">View and manage your personal information.</p>
                 </div>
-                {!isEditing && (
+                {!isEditing && !isMissingCollege && (
                     <button onClick={() => setIsEditing(true)} className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg font-medium transition-colors border border-slate-600">
                         Edit Profile
                     </button>
                 )}
             </div>
+
+            {isMissingCollege && (
+                <div className="bg-amber-500/10 border border-amber-500/50 rounded-xl p-4 flex items-center gap-4 animate-bounce-subtle">
+                    <span className="text-2xl">⚠️</span>
+                    <div>
+                        <p className="text-amber-400 font-bold">Incomplete Profile</p>
+                        <p className="text-amber-400/80 text-sm font-medium">Please select your college to access the full platform. This is mandatory for registration.</p>
+                    </div>
+                </div>
+            )}
 
             <div className="bg-[#1e293b] rounded-xl border border-slate-700 shadow-lg p-6 md:p-8">
                 <div className="flex flex-col md:flex-row gap-8 items-start">
@@ -259,11 +269,13 @@ export default function StudentProfile() {
                                 </div>
 
                                 <div className="pt-6 flex justify-end gap-3">
-                                    <button type="button" onClick={() => setIsEditing(false)} className="px-5 py-2.5 rounded-lg font-medium text-slate-300 hover:text-white hover:bg-slate-700 transition-colors">
-                                        Cancel
-                                    </button>
+                                    {!isMissingCollege && (
+                                        <button type="button" onClick={() => setIsEditing(false)} className="px-5 py-2.5 rounded-lg font-medium text-slate-300 hover:text-white hover:bg-slate-700 transition-colors">
+                                            Cancel
+                                        </button>
+                                    )}
                                     <button type="submit" disabled={submitting} className="bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-2.5 rounded-lg font-medium transition-colors shadow-lg shadow-indigo-500/20 disabled:opacity-50 flex items-center gap-2">
-                                        {submitting ? 'Saving...' : 'Save Changes'}
+                                        {submitting ? 'Saving...' : isMissingCollege ? 'Complete Registration' : 'Save Changes'}
                                     </button>
                                 </div>
                             </form>
