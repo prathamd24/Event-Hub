@@ -27,3 +27,11 @@ Thumbs.db
 logs/
 *.log
 firebase-admin.json
+backend/uploads/
+frontend/dist/
+frontend/node_modules/
+backend/venv/
+.env
+instance/
+backend/instance/
+*.db
