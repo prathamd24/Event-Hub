@@ -137,6 +137,9 @@ export default function EditClubModal({ isOpen, onClose, onSuccess, club }) {
             if (logo) data.append('logo', logo);
             if (cover) data.append('cover', cover);
 
+            // Append coordinators for bulk update
+            data.append('coordinators', JSON.stringify(coordinators));
+
             const removed = (club.clubPhotos || []).filter(url =>
                 !clubPhotos.some(p => p.existing && p.url === url)
             );
@@ -153,7 +156,7 @@ export default function EditClubModal({ isOpen, onClose, onSuccess, club }) {
                 try { await api.post('/api/college-admin/categories', { category: finalCategory }); } catch(e){}
             }
 
-            toast('Club updated successfully', 'success');
+            toast('Club and Coordinators updated successfully', 'success');
             onSuccess(res.data);
             onClose();
         } catch (err) {
@@ -163,51 +166,22 @@ export default function EditClubModal({ isOpen, onClose, onSuccess, club }) {
         }
     };
 
-    // --- COORDINATOR CRUD ---
-    const handleAddCoordinator = async () => {
+    // --- COORDINATOR CRUD (LOCAL UI) ---
+    const handleAddCoordinator = () => {
         if (!newCoordinator.name || !newCoordinator.email || !newCoordinator.password) {
             return toast('Fill all fields for the new coordinator', 'error');
         }
-        try {
-            const res = await api.post(`/api/college-admin/clubs/${club.id}/coordinators`, newCoordinator);
-            setCoordinators([...coordinators, res.data.coordinator]);
-            setNewCoordinator({ name: '', email: '', password: '' });
-            setShowAddCoordinator(false);
-            toast('Coordinator added successfully', 'success');
-        } catch (err) {
-            toast(err.response?.data?.error || 'Failed to add coordinator', 'error');
-        }
+        // Locally add
+        setCoordinators([...coordinators, { ...newCoordinator, id: null }]);
+        setNewCoordinator({ name: '', email: '', password: '' });
+        setShowAddCoordinator(false);
+        toast('Coordinator added to list (click save to apply)', 'info');
     };
 
-    const handleUpdateCoordinator = async (coordId, index) => {
-        setSavingCoordinatorId(coordId);
-        try {
-            const payload = {
-                name: coordinators[index].name,
-                email: coordinators[index].email,
-                password: coordinators[index].password // optional
-            };
-            const res = await api.put(`/api/college-admin/clubs/${club.id}/coordinators/${coordId}`, payload);
-            const updated = [...coordinators];
-            updated[index] = res.data.coordinator;
-            setCoordinators(updated);
-            toast('Coordinator updated successfully', 'success');
-        } catch (err) {
-            toast(err.response?.data?.error || 'Failed to update coordinator', 'error');
-        } finally {
-            setSavingCoordinatorId(null);
-        }
-    };
-
-    const handleDeleteCoordinator = async (coordId) => {
+    const handleDeleteCoordinator = (index) => {
         if (!window.confirm("Are you sure you want to remove this coordinator?")) return;
-        try {
-            await api.delete(`/api/college-admin/clubs/${club.id}/coordinators/${coordId}`);
-            setCoordinators(coordinators.filter(c => c.id !== coordId));
-            toast('Coordinator removed', 'success');
-        } catch (err) {
-            toast(err.response?.data?.error || 'Failed to remove coordinator', 'error');
-        }
+        setCoordinators(coordinators.filter((_, i) => i !== index));
+        toast('Coordinator removed from list', 'info');
     };
 
     const updateCoordField = (index, field, value) => {
@@ -312,75 +286,70 @@ export default function EditClubModal({ isOpen, onClose, onSuccess, club }) {
                                 </div>
                             )}
                         </div>
-                    </form>
 
-                    {/* --- COORDINATORS MANAGER --- */}
-                    <div className="p-6 pt-0 space-y-5 border-t border-white/10 mt-2">
-                        <div className="flex justify-between items-center bg-white/5 p-3 rounded-xl mt-6 border border-white/10">
-                            <div>
-                                <h3 className="text-white font-bold text-sm">Club Coordinators <span className="text-slate-400 font-normal">({coordinators.length})</span></h3>
-                                <p className="text-xs text-slate-400">Managers have full access to this club</p>
-                            </div>
-                            {!showAddCoordinator && (
-                                <button type="button" onClick={() => setShowAddCoordinator(true)} className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg flex items-center gap-1 transition-all">
-                                    + Add New
-                                </button>
-                            )}
-                        </div>
-
-                        {showAddCoordinator && (
-                            <div className="bg-indigo-500/10 border border-indigo-500/30 p-5 rounded-2xl relative shadow-inner">
-                                <h4 className="text-indigo-300 font-bold mb-3 text-sm">New Coordinator Detail</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <input type="text" placeholder="Full Name" value={newCoordinator.name} onChange={(e) => setNewCoordinator({...newCoordinator, name: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500/50 outline-none" />
-                                    <input type="email" placeholder="Email Address" value={newCoordinator.email} onChange={(e) => setNewCoordinator({...newCoordinator, email: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500/50 outline-none" />
-                                    <input type="password" placeholder="Set Password" value={newCoordinator.password} onChange={(e) => setNewCoordinator({...newCoordinator, password: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500/50 outline-none md:col-span-2" />
+                        {/* --- COORDINATORS MANAGER (INTEGRATED) --- */}
+                        <div className="p-6 pt-0 space-y-5 border-t border-white/10 mt-6 -mx-6">
+                            <div className="flex justify-between items-center bg-white/5 p-3 rounded-xl mt-6 border border-white/10">
+                                <div>
+                                    <h3 className="text-white font-bold text-sm">Club Coordinators <span className="text-slate-400 font-normal">({coordinators.length})</span></h3>
+                                    <p className="text-xs text-slate-400">Managers have full access to this club</p>
                                 </div>
-                                <div className="mt-4 flex justify-end gap-2">
-                                    <button onClick={() => setShowAddCoordinator(false)} className="text-xs px-4 py-2 hover:bg-white/10 rounded-lg text-slate-300">Cancel</button>
-                                    <button onClick={handleAddCoordinator} className="text-xs px-4 py-2 bg-indigo-600 hover:bg-indigo-500 font-bold rounded-lg text-white">Save Coordinator</button>
-                                </div>
-                            </div>
-                        )}
-
-                        {coordinators.map((coord, idx) => (
-                            <div key={coord.id || idx} className="bg-black/20 border border-white/10 p-4 rounded-xl relative flex flex-col gap-3 group">
-                                {coordinators.length > 1 && (
-                                    <button type="button" onClick={() => handleDeleteCoordinator(coord.id)} className="absolute -top-2 -right-2 w-6 h-6 bg-red-500/80 text-white hover:bg-red-500 rounded-full flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 shadow-lg z-10">
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                {!showAddCoordinator && (
+                                    <button type="button" onClick={() => setShowAddCoordinator(true)} className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg flex items-center gap-1 transition-all">
+                                        + Add New
                                     </button>
                                 )}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="text-[10px] text-slate-400 uppercase font-bold ml-1">Name</label>
-                                        <input type="text" value={coord.name || ''} onChange={(e) => updateCoordField(idx, 'name', e.target.value)} className="w-full bg-white/5 border border-white/5 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-indigo-500/50 transition-all" />
+                            </div>
+
+                            {showAddCoordinator && (
+                                <div className="bg-indigo-500/10 border border-indigo-500/30 p-5 rounded-2xl relative shadow-inner">
+                                    <h4 className="text-indigo-300 font-bold mb-3 text-sm">New Coordinator Detail</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <input type="text" placeholder="Full Name" value={newCoordinator.name} onChange={(e) => setNewCoordinator({...newCoordinator, name: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500/50 outline-none" />
+                                        <input type="email" placeholder="Email Address" value={newCoordinator.email} onChange={(e) => setNewCoordinator({...newCoordinator, email: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500/50 outline-none" />
+                                        <input type="password" placeholder="Set Password" value={newCoordinator.password} onChange={(e) => setNewCoordinator({...newCoordinator, password: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500/50 outline-none md:col-span-2" />
                                     </div>
-                                    <div>
-                                        <label className="text-[10px] text-slate-400 uppercase font-bold ml-1">Email</label>
-                                        <input type="email" value={coord.email || ''} onChange={(e) => updateCoordField(idx, 'email', e.target.value)} className="w-full bg-white/5 border border-white/5 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-indigo-500/50 transition-all font-mono" />
-                                    </div>
-                                    <div className="md:col-span-2 flex items-end gap-3">
-                                        <div className="flex-1">
-                                            <label className="text-[10px] text-slate-400 uppercase font-bold ml-1">Change Password (optional)</label>
-                                            <input type="password" placeholder="Leave blank to keep current" value={coord.password || ''} onChange={(e) => updateCoordField(idx, 'password', e.target.value)} className="w-full bg-white/5 border border-white/5 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-indigo-500/50 transition-all" />
-                                        </div>
-                                        <button onClick={() => handleUpdateCoordinator(coord.id, idx)} disabled={savingCoordinatorId === coord.id} className="text-xs font-bold px-4 py-1.5 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-white rounded-lg transition-all border border-emerald-500/30 whitespace-nowrap h-[34px]">
-                                            {savingCoordinatorId === coord.id ? 'Saving...' : 'Save Row'}
-                                        </button>
+                                    <div className="mt-4 flex justify-end gap-2">
+                                        <button type="button" onClick={() => setShowAddCoordinator(false)} className="text-xs px-4 py-2 hover:bg-white/10 rounded-lg text-slate-300">Cancel</button>
+                                        <button type="button" onClick={handleAddCoordinator} className="text-xs px-4 py-2 bg-indigo-600 hover:bg-indigo-500 font-bold rounded-lg text-white">Add to List</button>
                                     </div>
                                 </div>
-                            </div>
-                        ))}
-                    </div>
+                            )}
+
+                            {coordinators.map((coord, idx) => (
+                                <div key={coord.id || idx} className="bg-black/20 border border-white/10 p-4 rounded-xl relative flex flex-col gap-3 group">
+                                    <button type="button" onClick={() => handleDeleteCoordinator(idx)} className="absolute -top-2 -right-2 w-6 h-6 bg-red-500/80 text-white hover:bg-red-500 rounded-full flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 shadow-lg z-10">
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                    </button>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="text-[10px] text-slate-400 uppercase font-bold ml-1">Name</label>
+                                            <input type="text" value={coord.name || ''} onChange={(e) => updateCoordField(idx, 'name', e.target.value)} className="w-full bg-white/10 border border-white/5 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-indigo-500/50 transition-all font-medium" />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] text-slate-400 uppercase font-bold ml-1">Email</label>
+                                            <input type="email" value={coord.email || ''} onChange={(e) => updateCoordField(idx, 'email', e.target.value)} className="w-full bg-white/10 border border-white/5 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-indigo-500/50 transition-all font-mono" />
+                                        </div>
+                                        <div className="md:col-span-2">
+                                            <label className="text-[10px] text-slate-400 uppercase font-bold ml-1">Change Password (optional)</label>
+                                            <input type="password" placeholder="Leave blank to keep current" value={coord.password || ''} onChange={(e) => updateCoordField(idx, 'password', e.target.value)} className="w-full bg-white/10 border border-white/5 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-indigo-500/50 transition-all" />
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </form>
                 </div>
 
                 <div className="p-6 border-t border-white/10 flex justify-end gap-3 shrink-0 bg-black/20 z-10">
                     <button type="button" onClick={onClose} className="px-6 py-2.5 rounded-xl text-white font-bold hover:bg-white/10 border border-white/20 transition-all disabled:opacity-50">Cancel</button>
                     <button type="submit" form="edit-club-form" disabled={loading} className="px-8 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold transition-all shadow-lg disabled:opacity-50 flex items-center gap-2">
-                        {loading ? 'Saving...' : 'Save Main Club Details'}
+                        {loading ? 'Saving...' : 'Save All Changes'}
                     </button>
                 </div>
             </div>
         </div>
     );
 }
+
