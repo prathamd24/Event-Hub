@@ -1,4 +1,7 @@
+import { useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import api from '../services/api';
 
 const configs = {
     PENDING: {
@@ -44,9 +47,26 @@ const configs = {
 export default function CollegeBlockedPage() {
     const { state } = useLocation();
     const navigate = useNavigate();
+    const { logout } = useAuth();
     const reason = state?.reason || 'PENDING';
     const message = state?.message || '';
     const config = configs[reason] || configs.PENDING;
+
+    useEffect(() => {
+        if (reason === 'PENDING') {
+            const interval = setInterval(async () => {
+                try {
+                    const res = await api.get('/api/auth/me');
+                    if (res.data && res.data.isActive) {
+                        window.location.href = '/college-panel/dashboard';
+                    }
+                } catch (e) {
+                    // Still blocked
+                }
+            }, 5000);
+            return () => clearInterval(interval);
+        }
+    }, [reason]);
 
     return (
         <div className="min-h-[60vh] flex items-center justify-center">
@@ -61,7 +81,10 @@ export default function CollegeBlockedPage() {
                 <div className="flex flex-col gap-3 items-center">
                     {config.actions}
                     <button
-                        onClick={() => navigate('/login')}
+                        onClick={async () => {
+                            if (logout) await logout();
+                            navigate('/login');
+                        }}
                         className="text-sm text-slate-400 hover:text-slate-200 transition-colors mt-2"
                     >
                         ← Back to Login

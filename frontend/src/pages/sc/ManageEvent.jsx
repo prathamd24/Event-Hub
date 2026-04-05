@@ -1,8 +1,11 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "../../services/api";
 import { toast } from "../../components/Toast";
 import LoadingSpinner from "../../components/LoadingSpinner";
+import { exportToExcel } from "../../utils/exportToExcel";
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
 
 export default function ManageEvent() {
     const { id } = useParams();
@@ -10,6 +13,45 @@ export default function ManageEvent() {
     const [registrations, setRegistrations] = useState([]);
     const [teams, setTeams] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [expandedTeamId, setExpandedTeamId] = useState(null);
+    const [selectedScreenshot, setSelectedScreenshot] = useState(null);
+
+    const statusBadge = (s = 'PENDING') => {
+        const st = s.toUpperCase();
+        const cls = ['VERIFIED', 'PAID', 'FREE', 'COMPLETED'].includes(st)
+            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+            : st === 'PENDING' || st === 'AWAITING_PAYMENT' || st === 'PARTIALLY_PAID'
+            ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+            : 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+        return <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${cls}`}>{st}</span>;
+    };
+
+    const renderMemberRow = ({ id, name, email, isLeader, status, paymentRef, paymentShot }) => {
+        return (
+            <div key={id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-6 py-4 border-t border-slate-700/30 bg-slate-800/20">
+                <div className="flex items-start gap-3">
+                    <div className="text-xl">{isLeader ? "👑" : "👤"}</div>
+                    <div>
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <span className="text-white text-sm font-semibold">{name || 'Unknown'}</span>
+                            {isLeader && <span className="text-[9px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 uppercase tracking-widest font-black">Leader</span>}
+                            {statusBadge(status)}
+                        </div>
+                        <p className="text-slate-500 text-[10px] uppercase font-mono">{email}</p>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-3 ml-10 sm:ml-0">
+                    {paymentRef && <code className="text-emerald-400 font-mono text-[10px] bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">TXN: {paymentRef}</code>}
+                    {paymentShot && (
+                        <button onClick={() => setSelectedScreenshot(`${BACKEND_URL}${paymentShot}`)} className="text-indigo-400 text-[10px] hover:text-indigo-300 underline font-semibold">
+                            View Proof
+                        </button>
+                    )}
+                </div>
+            </div>
+        );
+    };
 
     useEffect(() => {
         fetchData();
@@ -35,6 +77,51 @@ export default function ManageEvent() {
 
     const isTeamEvent = event?.registration_type === "TEAM";
 
+    const handleExport = () => {
+        const dataToExport = [];
+        
+        if (!isTeamEvent || registrations.length > 0) {
+            registrations.forEach(r => {
+                dataToExport.push({
+                    Type: 'Individual',
+                    TeamName: r.teamName || '-',
+                    Role: 'Individual',
+                    Name: r.studentName,
+                    Email: r.studentEmail,
+                    Status: r.status,
+                    RegisteredAt: r.registeredAt ? new Date(r.registeredAt).toLocaleDateString() : 'N/A'
+                });
+            });
+        }
+        
+        if (isTeamEvent || teams.length > 0) {
+            teams.forEach(team => {
+                dataToExport.push({
+                    Type: 'Team',
+                    TeamName: team.teamName,
+                    Role: 'Leader',
+                    Name: team.leaderName,
+                    Email: team.leaderEmail,
+                    Status: team.status,
+                    RegisteredAt: team.createdAt ? new Date(team.createdAt).toLocaleDateString() : 'N/A'
+                });
+                team.members?.forEach(member => {
+                    dataToExport.push({
+                        Type: 'Team',
+                        TeamName: team.teamName,
+                        Role: 'Member',
+                        Name: member.invitedName || member.name || '-',
+                        Email: member.invitedEmail || member.email || '-',
+                        Status: member.paymentStatus,
+                        RegisteredAt: team.createdAt ? new Date(team.createdAt).toLocaleDateString() : 'N/A'
+                    });
+                });
+            });
+        }
+
+        exportToExcel(dataToExport, `${event?.title ? event.title.replace(/[^a-z0-9]/gi, '_') : 'Event'}_Registrations`);
+    };
+
     return (
         <div className="space-y-8 animate-fadeIn">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -51,7 +138,7 @@ export default function ManageEvent() {
                         </p>
                     </div>
                 </div>
-                <div className="flex gap-4">
+                <div className="flex flex-wrap items-center gap-4">
                     <div className="bg-indigo-600/10 border border-indigo-500/20 px-4 py-2 rounded-2xl">
                         <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest leading-none mb-1">
                             {isTeamEvent ? "Total Teams" : "Individuals"}
@@ -68,6 +155,9 @@ export default function ManageEvent() {
                             </p>
                         </div>
                     )}
+                    <button onClick={handleExport} className="h-full px-5 py-3 rounded-2xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/20 text-sm font-bold transition-all flex items-center gap-2">
+                        📊 Export Excel
+                    </button>
                 </div>
             </div>
 
@@ -160,46 +250,74 @@ export default function ManageEvent() {
                             </thead>
                             <tbody className="divide-y divide-white/5">
                                 {teams.map(team => (
-                                    <tr key={team.id} className="hover:bg-white/[0.02] transition-colors group">
-                                        <td className="px-8 py-6">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 font-bold">
-                                                    {team.teamName?.[0] || 'T'}
-                                                </div>
-                                                <div>
-                                                    <p className="text-white font-bold group-hover:text-purple-400 transition-colors uppercase italic">{team.teamName}</p>
-                                                    <p className="text-slate-500 text-[10px] font-medium tracking-tight">Leader: {team.leaderName} ({team.leaderEmail})</p>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-8 py-6">
-                                            <div className="flex -space-x-2">
-                                                {(team.members || []).slice(0, 4).map((m, i) => (
-                                                    <div key={i} title={m.invitedName} className="w-7 h-7 rounded-full bg-slate-800 border-2 border-slate-900 flex items-center justify-center text-[8px] font-bold text-slate-400">
-                                                        {m.invitedName?.[0] || 'M'}
+                                    <React.Fragment key={team.id}>
+                                        <tr 
+                                            onClick={() => setExpandedTeamId(expandedTeamId === team.id ? null : team.id)}
+                                            className="hover:bg-white/[0.02] transition-colors group cursor-pointer"
+                                        >
+                                            <td className="px-8 py-6">
+                                                <div className="flex items-center gap-4">
+                                                    <span className="text-slate-500 text-xs">{expandedTeamId === team.id ? '▼' : '▶'}</span>
+                                                    <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 font-bold flex-shrink-0">
+                                                        {team.teamName?.[0] || 'T'}
                                                     </div>
-                                                ))}
-                                                {(team.members || []).length > 4 && (
-                                                    <div className="w-7 h-7 rounded-full bg-slate-700 border-2 border-slate-900 flex items-center justify-center text-[8px] font-bold text-white">
-                                                        +{(team.members || []).length - 4}
+                                                    <div>
+                                                        <p className="text-white font-bold group-hover:text-purple-400 transition-colors uppercase italic">{team.teamName}</p>
+                                                        <p className="text-slate-500 text-[10px] font-medium tracking-tight">Leader: {team.leaderName} ({team.leaderEmail})</p>
                                                     </div>
-                                                )}
-                                            </div>
-                                            <p className="text-[10px] text-slate-500 mt-1 font-bold">{team.memberCount || (team.members || []).length + 1} Members</p>
-                                        </td>
-                                        <td className="px-8 py-6">
-                                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${
-                                                team.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                                            }`}>
-                                                {team.status}
-                                            </span>
-                                        </td>
-                                        <td className="px-8 py-6 text-right">
-                                            <p className="text-slate-400 text-xs font-bold font-mono">
-                                                {team.createdAt ? new Date(team.createdAt).toLocaleDateString() : 'N/A'}
-                                            </p>
-                                        </td>
-                                    </tr>
+                                                </div>
+                                            </td>
+                                            <td className="px-8 py-6">
+                                                <div className="flex -space-x-2">
+                                                    {(team.members || []).slice(0, 4).map((m, i) => (
+                                                        <div key={i} title={m.invitedName} className="w-7 h-7 rounded-full bg-slate-800 border-2 border-slate-900 flex items-center justify-center text-[8px] font-bold text-slate-400">
+                                                            {m.invitedName?.[0] || 'M'}
+                                                        </div>
+                                                    ))}
+                                                    {(team.members || []).length > 4 && (
+                                                        <div className="w-7 h-7 rounded-full bg-slate-700 border-2 border-slate-900 flex items-center justify-center text-[8px] font-bold text-white">
+                                                            +{(team.members || []).length - 4}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <p className="text-[10px] text-slate-500 mt-1 font-bold">{team.memberCount || (team.members || []).length + 1} Members</p>
+                                            </td>
+                                            <td className="px-8 py-6">
+                                                {statusBadge(team.status)}
+                                            </td>
+                                            <td className="px-8 py-6 text-right">
+                                                <p className="text-slate-400 text-xs font-bold font-mono">
+                                                    {team.createdAt ? new Date(team.createdAt).toLocaleDateString() : 'N/A'}
+                                                </p>
+                                            </td>
+                                        </tr>
+                                        {expandedTeamId === team.id && (
+                                            <tr>
+                                                <td colSpan="4" className="p-0 border-b border-slate-700/30">
+                                                    <div className="bg-slate-900/50 p-2">
+                                                        {renderMemberRow({
+                                                            id: team.id,
+                                                            name: team.leaderName,
+                                                            email: team.leaderEmail,
+                                                            isLeader: true,
+                                                            status: team.leaderPaymentStatus,
+                                                            paymentRef: team.leaderPaymentRef,
+                                                            paymentShot: team.leaderPaymentScreenshot
+                                                        })}
+                                                        {team.members?.map(m => renderMemberRow({
+                                                            id: m.id,
+                                                            name: m.invitedName || m.name,
+                                                            email: m.invitedEmail || m.email,
+                                                            isLeader: false,
+                                                            status: m.paymentStatus,
+                                                            paymentRef: m.paymentRef,
+                                                            paymentShot: m.paymentScreenshot
+                                                        }))}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </React.Fragment>
                                 ))}
                                 {teams.length === 0 && (
                                     <tr>
@@ -223,6 +341,12 @@ export default function ManageEvent() {
                     </p>
                 </div>
             </div>
+
+            {selectedScreenshot && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-8 bg-black/90 backdrop-blur-sm shadow-2xl" onClick={() => setSelectedScreenshot(null)}>
+                    <img src={selectedScreenshot} className="max-w-full max-h-full object-contain rounded-2xl border border-white/10" alt="Payment Proof" />
+                </div>
+            )}
         </div>
     );
 }

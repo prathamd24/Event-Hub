@@ -7,6 +7,8 @@ import CollegeCard from '../components/CollegeCard';
 import LoadingSpinner from '../components/LoadingSpinner';
 import RegisterEventModal from '../components/modals/RegisterEventModal';
 import TeamRegisterModal from '../components/modals/TeamRegisterModal';
+import Footer from '../components/Footer';
+
 
 export default function HomePage() {
     const [stats, setStats] = useState({ colleges: 0, events: 0, users: 0, clubs: 0 });
@@ -105,7 +107,7 @@ export default function HomePage() {
                 
                 <h1 className="text-5xl md:text-7xl font-display font-bold text-white tracking-tight mb-8 leading-tight">
                     The Ultimate <br className="hidden md:block" />
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400">College Event Hub</span>
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400">Event Hub</span>
                 </h1>
                 
                 <p className="text-lg md:text-xl text-slate-300 max-w-2xl mx-auto mb-12 leading-relaxed font-body">
@@ -165,40 +167,41 @@ export default function HomePage() {
                     <div>
                         <h2 className="text-4xl font-display font-bold text-white mb-3 flex items-center gap-3">
                             <span className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-sm shadow-[0_0_15px_rgba(99,102,241,0.3)]">✨</span>
-                            Featured Events
+                            Latest Events
                         </h2>
                         <p className="text-slate-400 font-body text-lg">What's happening around campuses</p>
                     </div>
                     <Link to="/events" className="flex items-center gap-2 text-indigo-400 hover:text-indigo-300 font-bold group px-4 py-2 rounded-lg hover:bg-indigo-500/10 transition-colors">
-                        View All Events
+                        View All
                         <span className="group-hover:translate-x-1 transition-transform">→</span>
                     </Link>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div className="flex overflow-x-auto gap-8 pb-10 no-scrollbar scroll-smooth snap-x snap-mandatory -mx-4 px-4 mask-fade-right">
                     {latestEvents.filter(e => e.title.toLowerCase().includes(search.toLowerCase())).length > 0 ? (
                         latestEvents.filter(e => e.title.toLowerCase().includes(search.toLowerCase())).map(event => {
                             const registration = myRegistrations.find(r => r.event?.id === event.id);
                             return (
-                                <EventCard 
-                                    key={event.id} 
-                                    event={event} 
-                                    isRegistered={registration}
-                                    onRegister={(e) => {
-                                        const regType = (e.registrationType || 'INDIVIDUAL').toUpperCase();
-                                        if (regType === 'TEAM') {
-                                            setSelectedEvent(e);
-                                            setShowTeamModal(true);
-                                        } else {
-                                            setSelectedEvent(e);
-                                            setShowTeamModal(false);
-                                        }
-                                    }}
-                                />
+                                <div key={event.id} className="w-[85vw] min-w-[85vw] sm:w-[320px] sm:min-w-[320px] md:w-[400px] md:min-w-[400px] snap-center">
+                                    <EventCard 
+                                        event={event} 
+                                        isRegistered={registration}
+                                        onRegister={(e) => {
+                                            const regType = (e.registrationType || 'INDIVIDUAL').toUpperCase();
+                                            if (regType === 'TEAM') {
+                                                setSelectedEvent(e);
+                                                setShowTeamModal(true);
+                                            } else {
+                                                setSelectedEvent(e);
+                                                setShowTeamModal(false);
+                                            }
+                                        }}
+                                    />
+                                </div>
                             );
                         })
                     ) : (
-                        <div className="col-span-full py-16 text-center text-slate-400 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-md">
+                        <div className="w-full py-16 text-center text-slate-400 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-md">
                             No upcoming events found.
                         </div>
                     )}
@@ -216,13 +219,15 @@ export default function HomePage() {
                         <p className="text-slate-400 font-body text-lg">Most active institutions on the platform</p>
                     </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div className="flex overflow-x-auto gap-8 pb-10 no-scrollbar scroll-smooth snap-x snap-mandatory -mx-4 px-4 mask-fade-right">
                     {topColleges.filter(c => c.name.toLowerCase().includes(search.toLowerCase())).length > 0 ? (
                         topColleges.filter(c => c.name.toLowerCase().includes(search.toLowerCase())).map(college => (
-                            <CollegeCard key={college.id} college={college} />
+                            <div key={college.id} className="w-[85vw] min-w-[85vw] sm:w-[320px] sm:min-w-[320px] md:w-[400px] md:min-w-[400px] snap-center">
+                                <CollegeCard college={college} />
+                            </div>
                         ))
                     ) : (
-                        <div className="col-span-full py-16 text-center text-slate-400 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-md">
+                        <div className="w-full py-16 text-center text-slate-400 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-md">
                             No colleges registered yet.
                         </div>
                     )}
@@ -230,18 +235,7 @@ export default function HomePage() {
             </section>
 
             {/* Premium Footer */}
-            <footer className="border-t border-white/10 pt-16 pb-8 mt-32 relative">
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1/2 h-px bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent" />
-                <div className="text-center">
-                    <div className="flex justify-center items-center gap-3 mb-6">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-indigo-500/30">
-                            E
-                        </div>
-                        <span className="text-2xl font-display font-bold text-white tracking-tight">EventHub</span>
-                    </div>
-                    <p className="text-slate-500 font-body">&copy; 2026 College Event Hub. Designed with premium aesthetics.</p>
-                </div>
-            </footer>
+            <Footer />
             {/* Registration Modals */}
             {selectedEvent && !showTeamModal && (
                 <RegisterEventModal

@@ -10,6 +10,7 @@ export default function MyEvents() {
     const [registrations, setRegistrations] = useState([]);
     const [myTeams, setMyTeams] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [regTab, setRegTab] = useState("upcoming"); // Section 4A
     const BASE = BACKEND_URL;
 
     useEffect(() => {
@@ -53,7 +54,14 @@ export default function MyEvents() {
         return myTeams.find(t => t.eventId === event?.id) || null
     }
 
-    const filtered = registrations;
+    // Section 4A: filter by tab
+    const displayRegs = registrations.filter(r =>
+        regTab === "upcoming"
+            ? ["UPCOMING", "ONGOING"].includes(r.event?.status || r.status || "")
+            : (r.event?.status || r.status || "") === "COMPLETED"
+    );
+    const upcomingCount = registrations.filter(r => ["UPCOMING","ONGOING"].includes(r.event?.status || r.status || "")).length;
+    const pastCount = registrations.filter(r => (r.event?.status || r.status || "") === "COMPLETED").length;
 
     if (loading) return <LoadingSpinner />;
 
@@ -65,11 +73,28 @@ export default function MyEvents() {
                     <p className="text-slate-400 text-sm font-medium">Track your registrations and participation status</p>
                 </div>
 
-            </div>
+                {/* Section 4A — Filter Tabs */}
+                <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none" style={{scrollbarWidth:"none"}}>
+                    {[
+                        { id: 'upcoming', label: `Upcoming (${upcomingCount})`, icon: '📅' },
+                        { id: 'past', label: `Past Events (${pastCount})`, icon: '📜' },
+                    ].map(opt => (
+                        <button key={opt.id}
+                            onClick={() => setRegTab(opt.id)}
+                            className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-medium transition-all min-h-[40px] whitespace-nowrap ${
+                            regTab === opt.id
+                                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
+                                : "bg-slate-800 text-slate-400 border border-slate-700"
+                            }`}>
+                            <span>{opt.icon}</span>
+                            <span>{opt.label}</span>
+                        </button>
+                    ))}
+                </div></div>
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                {filtered.length > 0 ? (
-                    filtered.map(item => {
+                {displayRegs.length > 0 ? (
+                    displayRegs.map(item => {
                         const event = item.event;
                         const team = getMyTeamForEvent(event);
                         const isTeam = !!team;
@@ -98,6 +123,22 @@ export default function MyEvents() {
                         };
                         const durationStr = calculateDuration();
 
+                        const hasScreenshot = !!(item.paymentScreenshotUrl || item.paymentScreenshot || item.leaderPaymentScreenshot);
+                        const isPendingAny = (_isPending || _isAwaiting || status === 'PENDING');
+                        const statusColor = (isPendingAny) 
+                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' 
+                            : status === 'REJECTED' 
+                                ? 'bg-red-500/10 text-red-400 border-red-500/20' 
+                                : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+                        
+                        const getStatusLabel = () => {
+                            if (_isPending) return 'Team: Pending';
+                            if (_isAwaiting) return hasScreenshot ? 'Registration Done' : 'Team: Payment';
+                            if (status === 'PENDING') return hasScreenshot ? 'Registration Done' : 'Payment Pending';
+                            if (status === 'REJECTED') return 'Rejected';
+                            return event?.registrationFee === 0 ? 'Confirmed' : 'Registration Confirmed';
+                        };
+
                         return (
                             <div key={id} className={`group relative bg-[#1e293b]/40 backdrop-blur-xl border rounded-[2rem] overflow-hidden hover:border-indigo-500/50 transition-all duration-500 flex flex-col sm:flex-row shadow-xl ${(_isPending || _isAwaiting) ? 'border-amber-500/20' : 'border-white/10'}`}>
                                 {/* Event Image Stub */}
@@ -113,12 +154,8 @@ export default function MyEvents() {
                                     <div>
                                         <div className="flex justify-between items-start mb-2">
                                             <h3 className="text-white font-bold text-lg line-clamp-1">{event?.title || 'Unknown Event'}</h3>
-                                            <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black tracking-widest uppercase border ${
-                                                (_isPending || _isAwaiting || status === 'PENDING') ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 animate-pulse' :
-                                                status === 'REJECTED' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-                                                'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                            }`}>
-                                                {_isPending ? 'Team: Pending' : _isAwaiting ? 'Team: Payment' : (status === 'PENDING' ? 'Pending Approval' : status === 'REJECTED' ? 'Rejected' : (event?.registrationFee === 0 ? 'Confirmed' : 'Registration Confirmed'))}
+                                            <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black tracking-widest uppercase border ${statusColor} ${isPendingAny && !hasScreenshot ? 'animate-pulse' : ''}`}>
+                                                {getStatusLabel()}
                                             </span>
                                         </div>
 

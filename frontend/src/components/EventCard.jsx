@@ -16,6 +16,22 @@ const EventCard = ({ event, onRegister, onCancel, isRegistered, showAll = false 
     const isActuallyCompleted = event?.status === 'COMPLETED';
     const isActuallyCancelled = event?.status === 'CANCELLED';
 
+    const getTimeLabel = (e) => {
+        if (!e.eventDate) return null;
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        const eventDate = new Date(e.eventDate);
+        eventDate.setHours(0,0,0,0);
+        const diffMs = eventDate - today;
+        const diffDays = Math.ceil(diffMs / (1000*60*60*24));
+
+        if (diffDays < 0)  return { label: "Completed", color: "text-slate-500" };
+        if (diffDays === 0) return { label: "Today!", color: "text-green-400 font-bold" };
+        if (diffDays === 1) return { label: "Tomorrow", color: "text-amber-400 font-bold" };
+        if (diffDays <= 7)  return { label: `${diffDays} days left`, color: "text-indigo-400 font-bold" };
+        return { label: new Date(e.eventDate).toLocaleDateString("en-IN", {day:"numeric",month:"short"}), color: "text-slate-400" };
+    };
+
     // If showAll is false, only show UNCOMING/ONGOING (the original behavior)
     if (!showAll && !["UPCOMING", "ONGOING"].includes(event?.status)) {
         return null;
@@ -160,9 +176,16 @@ const EventCard = ({ event, onRegister, onCancel, isRegistered, showAll = false 
                         <span className="text-xl">📅</span>
                         <div>
                             <p className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Date</p>
-                            <p className="text-xs font-bold text-white whitespace-nowrap">
-                                {event.eventDate ? new Date(event.eventDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : 'TBD'}
-                            </p>
+                            <div className="flex flex-col min-w-0">
+                                <p className="text-xs font-bold text-white truncate text-ellipsis">
+                                    {event.eventDate ? new Date(event.eventDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : 'TBD'}
+                                </p>
+                                {event.eventDate && getTimeLabel(event) && (
+                                    <span className={`text-[10px] ${getTimeLabel(event).color}`}>
+                                        {getTimeLabel(event).label}
+                                    </span>
+                                )}
+                            </div>
                         </div>
                     </div>
                     <div className="bg-white/[0.03] border border-white/[0.05] rounded-2xl p-3 flex items-center gap-3">
@@ -215,26 +238,44 @@ const EventCard = ({ event, onRegister, onCancel, isRegistered, showAll = false 
                     </div>
                 )}
                 {/* Buttons Area */}
-                <div className="mt-auto pt-4 flex gap-3 border-t border-white/[0.05]">
+                <div className="mt-auto pt-4 flex flex-col sm:flex-row gap-3 border-t border-white/[0.05]">
                     <button
                         onClick={() => navigate(`/events/${event.id}`)}
-                        className="flex-1 bg-white/[0.05] hover:bg-white/[0.1] text-white text-xs font-black py-4 rounded-2xl transition-all border border-white/[0.05] uppercase tracking-widest"
+                        className="w-full sm:flex-1 bg-white/[0.05] hover:bg-white/[0.1] text-white text-xs font-black py-4 rounded-2xl transition-all border border-white/[0.05] uppercase tracking-widest text-center"
                     >
                         View Info
                     </button>
                     
                     {user?.role === "STUDENT" && !isActuallyCompleted && !isActuallyCancelled && (onRegister || isRegistered) && (
                         isRegistered ? (
-                            <div className="flex-1 group/btn relative">
-                                <button
-                                    className={`w-full text-xs font-black py-4 rounded-2xl transition-all border uppercase tracking-widest ${
-                                        isRegistered.status === 'REJECTED' 
-                                        ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-                                        'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                    }`}
-                                >
-                                    {isRegistered.status === 'REJECTED' ? '✕ Rejected' : '✓ Registration Confirmed'}
-                                </button>
+                            <div className="w-full sm:flex-1 group/btn relative">
+                                {(() => {
+                                    const status = isRegistered.status;
+                                    const hasScreenshot = !!(isRegistered.paymentScreenshotUrl || isRegistered.paymentScreenshot || isRegistered.leaderPaymentScreenshot);
+                                    
+                                    let btnLabel = '✓ Registration Confirmed';
+                                    let btnColor = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+
+                                    if (status === 'REJECTED') {
+                                        btnLabel = '✕ Rejected';
+                                        btnColor = 'bg-red-500/10 text-red-400 border-red-500/20';
+                                    } else if (status === 'PENDING' || status === 'AWAITING_PAYMENT') {
+                                        btnLabel = hasScreenshot ? '✓ Registration Done' : '⏳ Payment Pending';
+                                        btnColor = 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+                                    } else if (event?.registrationFee > 0) {
+                                        btnLabel = '✓ Registration Confirmed';
+                                    } else {
+                                        btnLabel = '✓ Confirmed';
+                                    }
+
+                                    return (
+                                        <button
+                                            className={`w-full text-xs font-black py-4 rounded-2xl transition-all border uppercase tracking-widest ${btnColor} ${((status === 'PENDING' || status === 'AWAITING_PAYMENT') && !hasScreenshot) ? 'animate-pulse' : ''}`}
+                                        >
+                                            {btnLabel}
+                                        </button>
+                                    );
+                                })()}
                                 {isRegistered.status === 'REJECTED' && isRegistered.rejection_reason && (
                                     <div className="absolute bottom-full left-0 w-full mb-2 bg-red-900/90 backdrop-blur-md text-white text-[8px] p-2 rounded-lg opacity-0 group-hover/btn:opacity-100 transition-opacity border border-red-500/30 z-20 pointer-events-none">
                                         Reason: {isRegistered.rejection_reason}
@@ -252,7 +293,7 @@ const EventCard = ({ event, onRegister, onCancel, isRegistered, showAll = false 
                                     }
                                 }}
                                 disabled={!isRegistrationOpen}
-                                className={`flex-1 text-xs font-black py-4 rounded-2xl transition-all uppercase tracking-widest ${
+                                className={`w-full sm:flex-1 text-xs font-black py-4 rounded-2xl transition-all uppercase tracking-widest text-center ${
                                     isRegistrationOpen 
                                     ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20 hover:shadow-indigo-600/40 hover:-translate-y-0.5' 
                                     : 'bg-white/5 text-slate-600 border border-white/[0.05] cursor-not-allowed'

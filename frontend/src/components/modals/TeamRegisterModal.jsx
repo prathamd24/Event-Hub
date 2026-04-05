@@ -7,22 +7,27 @@ export default function TeamRegisterModal({ isOpen, onClose, event, onSuccess })
     const { user } = useAuth();
     const [loading, setLoading] = useState(false);
     const [teamName, setTeamName] = useState('');
-    const [emails, setEmails] = useState(['']); // First one is leader (user), but we need others
+    const [emails, setEmails] = useState(['']); // Dynamically set in effect
     const [createdTeam, setCreatedTeam] = useState(null);
     const [clubStats, setClubStats] = useState(null);
 
-    useEffect(() => {
-        if (event.clubId) {
-            api.get(`/api/public/clubs/${event.clubId}/stats`)
-                .then(r => setClubStats(r.data))
-                .catch(() => {});
-        }
-    }, [event.clubId]);
-    
-    if (!isOpen || !event) return null;
+    const minMembers = event?.minTeamSize || event?.teamMinSize || 2;
+    const maxMembers = event?.maxTeamSize || event?.teamMaxSize || 4;
 
-    const minMembers = event.teamMinSize || 2;
-    const maxMembers = event.teamMaxSize || 4;
+    useEffect(() => {
+        if (event) {
+            if (event.clubId) {
+                api.get(`/api/public/clubs/${event.clubId}/stats`)
+                    .then(r => setClubStats(r.data))
+                    .catch(() => {});
+            }
+            // Pre-fill mandatory empty slots required for min members
+            const requiredSlots = Math.max(1, minMembers - 1);
+            setEmails(Array.from({ length: requiredSlots }, () => ''));
+        }
+    }, [event, minMembers]);
+
+    if (!isOpen || !event) return null;
 
     const addEmail = () => {
         if (emails.length < maxMembers - 1) { // -1 because leader is already there
@@ -72,8 +77,8 @@ export default function TeamRegisterModal({ isOpen, onClose, event, onSuccess })
     };
 
     return (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto font-sans">
-            <div className="bg-[#0f172a] border border-white/10 rounded-[2.5rem] w-full max-w-lg shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] overflow-hidden animate-fadeIn relative my-auto">
+        <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4 overflow-hidden font-sans">
+            <div className="bg-[#0f172a] border border-white/10 rounded-t-[2.5rem] sm:rounded-[2.5rem] w-full sm:max-w-lg shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] overflow-y-auto animate-slideUp sm:animate-fadeIn relative my-0 sm:my-auto max-h-[90vh] pb-8 sm:pb-0">
                 <div className="absolute -top-24 -right-24 w-64 h-64 bg-purple-500/10 rounded-full blur-[80px] pointer-events-none" />
                 
                 <div className="px-8 pt-8 pb-4 flex justify-between items-center bg-white/[0.01]">
@@ -228,7 +233,7 @@ export default function TeamRegisterModal({ isOpen, onClose, event, onSuccess })
                         <div className="pt-4 space-y-4">
                             <button 
                                 onClick={handleCreateTeam}
-                                disabled={loading || !teamName.trim()}
+                                disabled={loading || !teamName.trim() || emails.filter(e => e.trim() !== '').length + 1 < minMembers}
                                 className="w-full py-5 rounded-3xl bg-white text-slate-950 font-black text-xs uppercase tracking-[0.2em] hover:bg-slate-100 transition-all shadow-2xl flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50"
                             >
                                 {loading ? (
@@ -236,7 +241,7 @@ export default function TeamRegisterModal({ isOpen, onClose, event, onSuccess })
                                         <div className="w-4 h-4 border-2 border-slate-950/30 border-t-slate-950 rounded-full animate-spin" />
                                         <span>CREATING TEAM...</span>
                                     </div>
-                                ) : 'CREATE TEAM & INVITE'}
+                                ) : (emails.filter(e => e.trim() !== '').length + 1 < minMembers ? `NEED AT LEAST ${minMembers} MEMBERS` : 'CREATE TEAM & INVITE')}
                             </button>
                             <p className="text-center text-[9px] text-slate-500 font-bold uppercase tracking-widest leading-relaxed">
                                 Team will be officially registered after <span className="text-purple-400 italic">all members</span> accept the invite and {event.registrationFee > 0 ? 'payment is made' : 'confirmation is sent'}.

@@ -6,6 +6,7 @@ import ClubCard from '../components/ClubCard';
 import EventCard from '../components/EventCard';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { BACKEND_URL } from '../config';
+import Footer from '../components/Footer';
 
 const BASE = BACKEND_URL;
 
@@ -14,6 +15,8 @@ export default function CollegeDetailPage() {
     const [college, setCollege] = useState(null);
     const [clubs, setClubs] = useState([]);
     const [events, setEvents] = useState([]);
+    const [pastEvents, setPastEvents] = useState([]);
+    const [showAllPast, setShowAllPast] = useState(false);
     const [studentCount, setStudentCount] = useState(0);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('about'); // 'about', 'clubs', 'events'
@@ -25,6 +28,7 @@ export default function CollegeDetailPage() {
                 setCollege(res.data);
                 setClubs(res.data.clubs || []);
                 setEvents(res.data.events || []);
+                setPastEvents(res.data.past_events || []);
                 setStudentCount(res.data.studentCount || 0);
             } catch (error) {
                 toast('Failed to load college details', 'error');
@@ -96,10 +100,14 @@ export default function CollegeDetailPage() {
                             <h1 className="text-4xl md:text-6xl font-display font-black text-[#fef3c7] tracking-tight drop-shadow-2xl">
                                 {college.name}
                             </h1>
-                            {college.affiliation && (
-                                <p className="bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest backdrop-blur-md">
-                                    🏛️ AFFILIATED TO {college.affiliation}
-                                </p>
+                            {college.affiliations && college.affiliations.length > 0 && (
+                                <div className="flex flex-wrap justify-center gap-2 mt-2">
+                                    {college.affiliations.map((affil, idx) => (
+                                        <p key={idx} className="bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest backdrop-blur-md">
+                                            🏛️ AFFILIATED TO {affil}
+                                        </p>
+                                    ))}
+                                </div>
                             )}
                         </div>
 
@@ -160,10 +168,14 @@ export default function CollegeDetailPage() {
                                 <p className="text-slate-500 text-xs mb-2 uppercase tracking-widest font-black">Location</p>
                                 <p className="text-white font-bold text-lg">📍 {college.location || 'N/A'}</p>
                             </div>
-                            {college.affiliation && (
+                            {college.affiliations && college.affiliations.length > 0 && (
                                 <div className="bg-[#0f172a]/50 p-6 rounded-2xl border border-white/5">
-                                    <p className="text-slate-500 text-xs mb-2 uppercase tracking-widest font-black">Affiliation</p>
-                                    <p className="text-white font-bold text-lg">🏛️ {college.affiliation}</p>
+                                    <p className="text-slate-500 text-xs mb-2 uppercase tracking-widest font-black">Affiliations</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {college.affiliations.map((affil, idx) => (
+                                            <span key={idx} className="text-indigo-300 font-bold text-sm bg-indigo-500/10 px-2 py-1 rounded-md border border-indigo-500/20">🏛️ {affil}</span>
+                                        ))}
+                                    </div>
                                 </div>
                             )}
                             <div className="bg-[#0f172a]/50 p-6 rounded-2xl border border-white/5">
@@ -183,6 +195,45 @@ export default function CollegeDetailPage() {
                                 )}
                             </div>
                         </div>
+
+                        {/* Contact & Social Section */}
+                        {(college.contactEmail || college.phone || college.facebook || college.instagram || college.twitter || college.linkedin) && (
+                            <div className="pt-8 border-t border-white/10">
+                                <h4 className="text-sm font-black text-slate-500 uppercase tracking-widest mb-4">Contact & Connect</h4>
+                                <div className="flex flex-wrap gap-4">
+                                    {college.contactEmail && (
+                                        <a href={`mailto:${college.contactEmail}`} className="flex items-center gap-2 bg-[#0f172a]/50 border border-white/5 px-4 py-2 rounded-xl text-slate-300 hover:text-white hover:border-white/20 transition-all">
+                                            <span>✉️</span> <span className="text-sm font-bold truncate max-w-[200px]">{college.contactEmail}</span>
+                                        </a>
+                                    )}
+                                    {college.phone && (
+                                        <a href={`tel:${college.phone}`} className="flex items-center gap-2 bg-[#0f172a]/50 border border-white/5 px-4 py-2 rounded-xl text-slate-300 hover:text-white hover:border-white/20 transition-all">
+                                            <span>📞</span> <span className="text-sm font-bold">{college.phone}</span>
+                                        </a>
+                                    )}
+                                    {college.instagram && (
+                                        <a href={college.instagram} target="_blank" rel="noreferrer" className="flex items-center gap-2 bg-pink-500/10 border border-pink-500/20 px-4 py-2 rounded-xl text-pink-400 hover:bg-pink-500/20 transition-all">
+                                            📸 <span className="text-sm font-bold">Instagram</span>
+                                        </a>
+                                    )}
+                                    {college.twitter && (
+                                        <a href={college.twitter} target="_blank" rel="noreferrer" className="flex items-center gap-2 bg-sky-500/10 border border-sky-500/20 px-4 py-2 rounded-xl text-sky-400 hover:bg-sky-500/20 transition-all">
+                                            🐦 <span className="text-sm font-bold">Twitter</span>
+                                        </a>
+                                    )}
+                                    {college.linkedin && (
+                                        <a href={college.linkedin} target="_blank" rel="noreferrer" className="flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 px-4 py-2 rounded-xl text-blue-400 hover:bg-blue-500/20 transition-all">
+                                            💼 <span className="text-sm font-bold">LinkedIn</span>
+                                        </a>
+                                    )}
+                                    {college.facebook && (
+                                        <a href={college.facebook} target="_blank" rel="noreferrer" className="flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/20 px-4 py-2 rounded-xl text-indigo-400 hover:bg-indigo-500/20 transition-all">
+                                            📘 <span className="text-sm font-bold">Facebook</span>
+                                        </a>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </section>
 
                     {/* Gallery Section */}
@@ -235,6 +286,37 @@ export default function CollegeDetailPage() {
                         </div>
                     </section>
 
+                    {/* Past Events Section */}
+                    {pastEvents.length > 0 && (
+                        <section id="past-events" className="animate-fadeIn mt-16 pt-12 border-t border-white/5">
+                            <div className="flex items-center justify-between mb-8 px-2">
+                                <h3 className="text-2xl font-display font-bold text-slate-400 flex items-center gap-3">
+                                    <span className="w-10 h-10 rounded-xl bg-slate-500/20 flex items-center justify-center text-lg border border-slate-500/30 grayscale">⏮️</span>
+                                    Past Events
+                                    <span className="bg-slate-500/20 text-slate-400 text-xs font-black px-3 py-1 rounded-lg ml-2">{pastEvents.length}</span>
+                                </h3>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                {(showAllPast ? pastEvents : pastEvents.slice(0, 3)).map(event => (
+                                    <div key={event.id} className="opacity-80 hover:opacity-100 transition-opacity grayscale hover:grayscale-0">
+                                        <EventCard event={event} showAll={true} />
+                                    </div>
+                                ))}
+                            </div>
+                            
+                            {pastEvents.length > 3 && (
+                                <div className="mt-10 flex justify-center">
+                                    <button 
+                                        onClick={() => setShowAllPast(!showAllPast)}
+                                        className="px-8 py-3 rounded-full bg-slate-800/50 hover:bg-slate-700/80 text-slate-300 font-bold text-sm border border-slate-600/50 transition-all hover:-translate-y-1"
+                                    >
+                                        {showAllPast ? 'Show Less' : `View All Past Events (${pastEvents.length})`}
+                                    </button>
+                                </div>
+                            )}
+                        </section>
+                    )}
+
                     {/* 3. Clubs Section */}
                     <section id="clubs" className="animate-fadeIn pb-12">
                         <div className="flex items-center justify-between mb-8 px-2">
@@ -260,6 +342,8 @@ export default function CollegeDetailPage() {
                 </div>
 
             </div>
+            {/* Premium Footer */}
+            <Footer />
         </div>
     );
 }

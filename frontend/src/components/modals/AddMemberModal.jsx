@@ -51,10 +51,10 @@ export default function AddMemberModal({ onClose, onSuccess }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
       <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={onClose} />
       
-      <div className="relative w-full max-w-md bg-slate-900 border border-white/10 rounded-3xl p-8 shadow-2xl overflow-hidden">
+      <div className="relative w-full sm:max-w-md bg-slate-900 border border-white/10 rounded-t-3xl sm:rounded-3xl p-8 shadow-2xl overflow-y-auto max-h-[90vh] animate-slideUp sm:animate-fadeIn pb-12 sm:pb-8">
         <div className="absolute top-0 right-0 p-4">
           <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors">✕</button>
         </div>

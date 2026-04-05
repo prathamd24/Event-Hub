@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import api from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -36,6 +36,7 @@ export default function ClubDashboard() {
   const [events, setEvents] = useState([]);
   const [members, setMembers] = useState([]);
   const [volunteers, setVolunteers] = useState([]);
+  const [fellowCoordinators, setFellowCoordinators] = useState([]);
   const [eventFilter, setEventFilter] = useState("UPCOMING"); // UPCOMING, ONGOING, COMPLETED
   const [broadcasts, setBroadcasts] = useState([]);
   const [completedEvents, setCompletedEvents] = useState([]);
@@ -64,10 +65,13 @@ export default function ClubDashboard() {
     name: "", description: "", instagram: "", website: "", logoUrl: "", coverUrl: ""
   });
 
+  const activeTabRef = useRef(activeTab);
+  useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
+
   const fetchData = async () => {
     try {
       const q = clubId ? `?club_id=${clubId}` : '';
-      const [statsRes, clubRes, eventsRes, membersRes, volRes, logsRes, bcastRes, historyRes] = await Promise.all([
+      const [statsRes, clubRes, eventsRes, membersRes, volRes, logsRes, bcastRes, historyRes, fellowRes] = await Promise.all([
         api.get(`/api/club/stats${q}`),
         api.get(`/api/club/info${q}`),
         api.get(`/api/club/events${q}`),
@@ -75,18 +79,20 @@ export default function ClubDashboard() {
         api.get(`/api/club/roles${q}`).catch(() => ({ data: { roles: [] } })),
         api.get(`/api/club/logs${q}`).catch(() => ({ data: { logs: [] } })),
         api.get(`/api/club/broadcasts${q}`).catch(() => ({ data: { broadcasts: [] } })),
-        api.get(`/api/club/events?status=COMPLETED${clubId ? `&club_id=${clubId}` : ''}`).catch(() => ({ data: [] }))
+        api.get(`/api/club/events?status=COMPLETED${clubId ? `&club_id=${clubId}` : ''}`).catch(() => ({ data: [] })),
+        api.get('/api/club/fellow-coordinators').catch(() => ({ data: [] }))
       ]);
       setStats(statsRes.data || {});
       setClub(clubRes.data || null);
       setEvents(Array.isArray(eventsRes.data) ? eventsRes.data : []);
       setMembers(Array.isArray(membersRes.data) ? membersRes.data : []);
       setVolunteers(Array.isArray(volRes.data?.roles) ? volRes.data.roles : []);
+      setFellowCoordinators(Array.isArray(fellowRes.data) ? fellowRes.data : []);
       setLogs(Array.isArray(logsRes.data?.logs) ? logsRes.data.logs : []);
       setBroadcasts(Array.isArray(bcastRes.data?.broadcasts) ? bcastRes.data.broadcasts : []);
       setCompletedEvents(Array.isArray(historyRes.data) ? historyRes.data : []);
       
-      if (clubRes.data) {
+      if (clubRes.data && activeTabRef.current !== 'settings') {
         setSettings({
           name: clubRes.data.name || "",
           description: clubRes.data.description || "",
@@ -227,7 +233,7 @@ export default function ClubDashboard() {
     { id: "overview", label: "Overview", icon: "📊" },
     { id: "events", label: "Events", icon: "📅" },
     { id: "history", label: "History", icon: "⏳" },
-    { id: "members", label: "Student Coordinators", icon: "👥" },
+    { id: "members", label: "Coordinators", icon: "👥" },
     { id: "volunteers", label: "Roles", icon: "🛡️" },
     { id: "logs", label: "Logs", icon: "📋" },
     { id: "settings", label: "Settings", icon: "⚙️" },
@@ -499,12 +505,16 @@ export default function ClubDashboard() {
                         >
                           View List
                         </button>
-                        <button 
-                          onClick={() => handleEditEvent(ev)}
-                          className="text-slate-400 hover:text-white transition-colors bg-white/5 md:bg-transparent px-3 py-1 md:p-0 rounded-lg md:rounded-none"
-                        >
-                          ✏️ Edit
-                        </button>
+                        {ev.status !== 'COMPLETED' && ev.status !== 'CANCELLED' ? (
+                          <button 
+                            onClick={() => handleEditEvent(ev)}
+                            className="text-slate-400 hover:text-white transition-colors bg-white/5 md:bg-transparent px-3 py-1 md:p-0 rounded-lg md:rounded-none"
+                          >
+                            ✏️ Edit
+                          </button>
+                        ) : (
+                          <span className="text-slate-600 text-xs italic px-3 md:p-0 mt-1 md:mt-0">✓ Locked</span>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -560,14 +570,14 @@ export default function ClubDashboard() {
       {activeTab === "members" && (
         <div className="space-y-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <h2 className="text-white font-bold italic uppercase tracking-tighter underline decoration-indigo-500 decoration-2 underline-offset-8">Manage Members</h2>
+            <h2 className="text-white font-bold italic uppercase tracking-tighter underline decoration-indigo-500 decoration-2 underline-offset-8">Coordinators</h2>
             <button onClick={() => setShowAddMember(true)} className="bg-white text-slate-950 px-6 py-2.5 rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all">+ Add Student Coordinator</button>
           </div>
 
           <div className="flex gap-4 p-1 bg-slate-800/50 rounded-2xl border border-slate-700/50 w-fit">
             {[
-              { id: "coordinators", label: "Leadership Team", icon: "💎" },
-              { id: "volunteers", label: "Active Volunteers", icon: "🤝" }
+              { id: "coordinators", label: "Student Coordinators", icon: "💎" },
+              { id: "network", label: "Staff Club Coordinators", icon: "🤝" }
             ].map(tab => (
               <button key={tab.id} onClick={() => setActiveMemberTab(tab.id)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
@@ -580,12 +590,8 @@ export default function ClubDashboard() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-             {volunteers
-               .filter(m => {
-                 if (activeMemberTab === 'coordinators') return m.role === 'STUDENT_COORDINATOR';
-                 if (activeMemberTab === 'volunteers') return m.role === 'VOLUNTEER';
-                 return true;
-               })
+             {activeMemberTab === 'coordinators' && volunteers
+               .filter(m => m.role === 'STUDENT_COORDINATOR')
                .map((m, i) => (
                  <div key={i} className="bg-slate-900 border border-slate-800 p-5 rounded-3xl hover:border-slate-700 transition-all">
                    <div className="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center text-xl mb-4">👤</div>
@@ -606,13 +612,49 @@ export default function ClubDashboard() {
                  </div>
                ))
              }
-             {volunteers.filter(m => {
-                 if (activeMemberTab === 'coordinators') return m.role === 'STUDENT_COORDINATOR';
-                 if (activeMemberTab === 'volunteers') return m.role === 'VOLUNTEER';
-                 return true;
-             }).length === 0 && (
+
+             {activeMemberTab === 'network' && fellowCoordinators
+               .map((c, i) => (
+                 <div key={i} className="bg-slate-900 border border-slate-800 p-5 rounded-3xl hover:border-slate-700 transition-all relative overflow-hidden">
+                   {c.isPrimary && (
+                      <div className="absolute top-4 right-4 bg-gradient-to-r from-amber-500 to-orange-500 w-6 h-6 rounded-full border-2 border-slate-900 flex items-center justify-center" title="Primary Coordinator">
+                          <span className="text-[10px]">👑</span>
+                      </div>
+                   )}
+                   <div className="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center overflow-hidden mb-4 border border-slate-700">
+                     {c.profilePic ? (
+                       <img src={`${BACKEND_URL}${c.profilePic}`} alt="Profile" className="w-full h-full object-cover" />
+                     ) : (
+                       <span className="text-xl">🤝</span>
+                     )}
+                   </div>
+                   <h3 className="text-white font-bold text-sm uppercase italic">{c.name}</h3>
+                   <p className="text-slate-500 text-xs mt-1">{c.email}</p>
+                   
+                   <div className="flex flex-wrap gap-2 mt-3">
+                       <span className="inline-block px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold border border-emerald-500/20 uppercase flex items-center gap-1">
+                         <svg className="w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+                         {c.clubName}
+                       </span>
+                   </div>
+                   <div className="mt-4 pt-4 border-t border-slate-800 flex justify-end items-center">
+                     <a href={`mailto:${c.email}`} className="text-slate-400 hover:text-white text-xs font-bold flex items-center gap-1.5 px-3 py-1 rounded-lg hover:bg-white/5 transition-all border border-slate-700 hover:border-slate-500">
+                       Contact
+                     </a>
+                   </div>
+                 </div>
+               ))
+             }
+
+             {activeMemberTab === 'coordinators' && volunteers.filter(m => m.role === 'STUDENT_COORDINATOR').length === 0 && (
                <div className="col-span-full py-20 text-center text-slate-600 italic">
-                 No {activeMemberTab} found in this club.
+                 No student coordinators found in this club.
+               </div>
+             )}
+             
+             {activeMemberTab === 'network' && fellowCoordinators.length === 0 && (
+               <div className="col-span-full py-20 text-center text-slate-600 italic">
+                 No staff club coordinators found in this club.
                </div>
              )}
           </div>

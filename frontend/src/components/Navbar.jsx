@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import NotificationBell from './NotificationBell';
+import Logo from './Logo';
 
 import { BACKEND_URL } from '../config';
 
@@ -20,13 +21,8 @@ export default function Navbar() {
             <div className="max-w-7xl mx-auto flex items-center justify-between w-full">
 
                 {/* Logo Section */}
-                <Link to="/" className="flex items-center gap-3 group shrink-0">
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-indigo-500/30 group-hover:shadow-indigo-500/50 transition-all duration-300">
-                        E
-                    </div>
-                    <span className="text-xl font-display font-bold hidden sm:block tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400">
-                        EventHub
-                    </span>
+                <Link to="/" className="flex items-center group shrink-0">
+                    <Logo className="text-2xl sm:text-3xl" />
                 </Link>
 
                 {/* Navigation Links - Desktop Only */}
@@ -60,7 +56,7 @@ export default function Navbar() {
                             <button className="flex items-center gap-2.5 hover:bg-white/5 rounded-full pr-3 py-1.5 pl-1.5 transition-colors border border-transparent hover:border-white/10">
                                 <div className="w-9 h-9 rounded-full overflow-hidden bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold shadow-md shrink-0">
                                     {user.profilePic ? (
-                                        <img src={user.profilePic.startsWith('http') ? user.profilePic : `http://localhost:8080${user.profilePic}`} alt="Profile" className="w-full h-full object-cover" />
+                                        <img src={user.profilePic.startsWith('http') ? user.profilePic : `${BACKEND_URL}${user.profilePic}`} alt="Profile" className="w-full h-full object-cover" />
                                     ) : (
                                         user.name ? user.name.charAt(0).toUpperCase() : 'U'
                                     )}

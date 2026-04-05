@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
 import { toast } from '../components/Toast';
-import { signInWithRedirect, getRedirectResult } from 'firebase/auth';
+import { signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
 import { useAuth } from '../context/AuthContext';
+import Footer from '../components/Footer';
 
 export default function RegisterPage() {
     const [colleges, setColleges] = useState([]);
@@ -21,44 +22,6 @@ export default function RegisterPage() {
 
     useEffect(() => {
         api.get('/api/public/colleges').then(res => setColleges(res.data));
-
-        // Check for redirect result
-        const checkRedirect = async () => {
-            try {
-                const result = await getRedirectResult(auth);
-                if (result) {
-                    setLoading(true);
-                    const user = result.user;
-
-                    // Retrieve stored college data
-                    const storedCollegeId = sessionStorage.getItem('pending_college_id');
-                    const storedCollegeName = sessionStorage.getItem('pending_college_name');
-
-                    const submitData = {
-                        name: user.displayName || 'Google User',
-                        email: user.email,
-                        collegeId: storedCollegeId || null,
-                        collegeNameManual: !storedCollegeId ? storedCollegeName : null
-                    };
-
-                    const res = await api.post('/api/auth/register', submitData);
-                    toast('Welcome to College Event Hub! 🎉', 'success');
-                    setUser(res.data.user);
-                    
-                    // Clear storage
-                    sessionStorage.removeItem('pending_college_id');
-                    sessionStorage.removeItem('pending_college_name');
-                    
-                    navigate('/');
-                }
-            } catch (err) {
-                console.error('Redirect registration error:', err);
-                toast(err.response?.data?.error || err.message || 'Registration failed', 'error');
-            } finally {
-                setLoading(false);
-            }
-        };
-        checkRedirect();
     }, []);
 
     const handleGoogleRegister = async () => {
@@ -68,25 +31,47 @@ export default function RegisterPage() {
         }
 
         setLoading(true);
+        sessionStorage.setItem('registration_in_progress', 'true');
         try {
-            // Store college info before redirect
-            sessionStorage.setItem('pending_college_id', selectedCollegeId);
-            sessionStorage.setItem('pending_college_name', collegeSearch);
-            
-            await signInWithRedirect(auth, googleProvider);
+            // signInWithPopup gives us the result immediately — no redirect needed
+            const result = await signInWithPopup(auth, googleProvider);
+            const idToken = await result.user.getIdToken();
+
+            const res = await api.post('/api/auth/register', {
+                name: result.user.displayName || result.user.email?.split('@')[0] || 'Student',
+                email: result.user.email,
+                collegeId: selectedCollegeId || null,
+                collegeNameManual: !selectedCollegeId ? collegeSearch : null
+            }, {
+                headers: { Authorization: `Bearer ${idToken}` }
+            });
+
+            sessionStorage.removeItem('registration_in_progress');
+            toast('Welcome to Event Hub! 🎉', 'success');
+            setUser(res.data.user);
+            navigate('/');
         } catch (err) {
-            console.error('Google registration redirect error:', err);
-            toast(err.message || 'Registration failed', 'error');
+            sessionStorage.removeItem('registration_in_progress');
+            // User closed the popup
+            if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+                setLoading(false);
+                return;
+            }
+            console.error('Registration error:', err);
+            toast(err.response?.data?.error || err.message || 'Registration failed', 'error');
+        } finally {
+            sessionStorage.removeItem('registration_in_progress');
             setLoading(false);
         }
     };
 
     return (
-        <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-4 sm:p-6 lg:p-8 animate-fadeIn relative overflow-hidden">
+        <div className="min-h-screen bg-[#0f172a] flex flex-col animate-fadeIn relative overflow-x-hidden">
             <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-500/20 rounded-full blur-[120px] pointer-events-none" />
             <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-purple-500/20 rounded-full blur-[120px] pointer-events-none" />
 
-            <div className="w-full max-w-6xl bg-white/5 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col md:flex-row relative z-10 my-8">
+            <div className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8 w-full mt-16 md:mt-0">
+                <div className="w-full max-w-6xl bg-white/5 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col md:flex-row relative z-10 my-8">
                 
                 {/* Left Side - Hero */}
                 <div className="w-full md:w-1/2 relative min-h-[300px] md:min-h-full hidden md:block">
@@ -229,11 +214,15 @@ export default function RegisterPage() {
                     </div>
                 </div>
             </div>
+            </div>
 
             {/* Back to Home */}
             <Link to="/" className="absolute top-6 left-6 md:top-8 md:left-8 w-12 h-12 rounded-full bg-white/5 border border-white/10 backdrop-blur-md flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-all z-20">
                 ←
             </Link>
+
+            {/* Premium Footer */}
+            <Footer />
         </div>
     );
 }

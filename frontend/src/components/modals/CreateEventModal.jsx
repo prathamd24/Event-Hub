@@ -206,6 +206,7 @@ export default function CreateEventModal({ isOpen, onClose, onSuccess, isClub: i
         if (step === 2) {
             if (!formData.eventDate) { setError("Start date is required"); return; }
             if (formData.eventDate < todayStr) { setError("Start date cannot be in the past"); return; }
+            if (!formData.endDate) { setError("End date is required"); return; }
             
             const startDateTime = new Date(`${formData.eventDate}T${formData.startTime || '00:00'}`);
             const endDateTime = new Date(`${formData.endDate || formData.eventDate}T${formData.endTime || '23:59'}`);
@@ -637,8 +638,8 @@ export default function CreateEventModal({ isOpen, onClose, onSuccess, isClub: i
                                     <input type="date" name="eventDate" required value={formData.eventDate} onChange={handleChange} className={`${inputCls} [color-scheme:dark]`} />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-slate-300 mb-2">End Date <span className="text-slate-500 font-normal">(optional)</span></label>
-                                    <input type="date" name="endDate" value={formData.endDate} min={formData.eventDate} onChange={handleChange} className={`${inputCls} [color-scheme:dark]`} />
+                                    <label className="block text-sm font-bold text-slate-300 mb-2">End Date <span className="text-red-400">*</span></label>
+                                    <input type="date" name="endDate" required value={formData.endDate} min={formData.eventDate} onChange={handleChange} className={`${inputCls} [color-scheme:dark]`} />
                                 </div>
                             </div>
                             {formData.endDate && formData.endDate !== formData.eventDate && (

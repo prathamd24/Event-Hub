@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from '../components/Toast';
-import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, getRedirectResult, signInWithRedirect } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
 import api from '../services/api';
 
@@ -43,39 +43,92 @@ export default function AdminLoginPage() {
             await signInWithEmailAndPassword(auth, email, password);
             await processBackendLogin();
         } catch (err) {
-            handleAuthError(err);
+            // If the user exists in our DB but not in Firebase (legacy coordinator), auto-create
+            if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
+                try {
+                    await createUserWithEmailAndPassword(auth, email, password);
+                    await processBackendLogin();
+                    return;
+                } catch (createErr) {
+                    console.error("Auto-create fallback failed:", createErr);
+                    handleAuthError(err); // Show original error
+                }
+            } else {
+                handleAuthError(err);
+            }
         } finally {
             setLoading(false);
         }
     };
+
+    useEffect(() => {
+        // Recover persistent errors from sessionStorage
+        const storedError = sessionStorage.getItem('pending_login_error');
+        if (storedError) {
+            console.log('[Auth Debug] Recovered admin error from session:', storedError);
+            setError(storedError);
+            sessionStorage.removeItem('pending_login_error');
+        }
+
+        const checkRedirect = async () => {
+            try {
+                const result = await getRedirectResult(auth);
+                if (result) {
+                    setLoading(true);
+                    const idToken = await result.user.getIdToken();
+                    const res = await api.post('/api/auth/google-login', { idToken });
+                    const dbUser = res.data.user;
+                    setUser(dbUser);
+
+                    if (dbUser.role === 'STUDENT') {
+                        toast('Students, please use the main login page.', 'info');
+                        navigate('/login');
+                        return;
+                    }
+
+                    toast(`Welcome back, ${dbUser.name}!`, 'success');
+                    navigate('/');
+                }
+            } catch (err) {
+                console.error('Redirect result error:', err);
+                handleAuthError(err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        checkRedirect();
+    }, []);
 
     const handleGoogleSignIn = async () => {
         setLoading(true);
         setError('');
         try {
-            const result = await signInWithPopup(auth, googleProvider);
-            const idToken = await result.user.getIdToken();
-            const res = await api.post('/api/auth/google-login', { idToken });
-            const dbUser = res.data.user;
-            setUser(dbUser);
-
-            if (dbUser.role === 'STUDENT') {
-                toast('Students, please use the main login page.', 'info');
-                navigate('/login');
-                return;
-            }
-
-            toast(`Welcome back, ${dbUser.name}!`, 'success');
-            navigate('/');
+            await signInWithRedirect(auth, googleProvider);
         } catch (err) {
-            console.error('Google Sign-In error:', err);
+            console.error('Google Sign-In redirect error:', err);
             handleAuthError(err);
-        } finally {
             setLoading(false);
         }
     };
 
     const handleAuthError = async (err) => {
+        if (err.response?.status === 404) {
+            const message = err.response.data.error || 'Please register yourself first.';
+            
+            // Persist the error
+            sessionStorage.setItem('pending_login_error', message);
+            
+            setError(message);
+            toast(message, 'error');
+            
+            if (auth.currentUser) {
+                // Delay signOut to let the message show
+                setTimeout(async () => {
+                    await auth.signOut();
+                }, 2000);
+            }
+            return;
+        }
         if (err.response?.data?.blocked) {
             navigate('/college-blocked', { state: { reason: err.response.data.reason, message: err.response.data.message } });
             return;
@@ -116,8 +169,19 @@ export default function AdminLoginPage() {
                     </div>
 
                     {error && (
-                        <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-sm text-red-400 flex items-center gap-3">
-                            <span>⚠️</span> {error}
+                        <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-4 text-sm text-red-400 flex flex-col gap-3 shadow-lg">
+                            <div className="flex items-center gap-3">
+                                <span className="text-xl">⚠️</span>
+                                <span className="font-semibold">{error}</span>
+                            </div>
+                            {error.includes('register') && (
+                                <button 
+                                    onClick={() => navigate('/register')}
+                                    className="mt-1 w-full bg-red-500/20 hover:bg-red-500/30 text-red-100 font-bold py-2 rounded-lg border border-red-500/30 transition-all text-xs uppercase tracking-wider shadow-sm"
+                                >
+                                    Go to Registration Page →
+                                </button>
+                            )}
                         </div>
                     )}
 

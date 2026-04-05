@@ -92,19 +92,26 @@ export default function CollegeAdminEvents() {
                 </button>
             </div>
 
-            <div className="flex bg-slate-800/50 p-1.5 rounded-2xl border border-slate-700/50 w-fit relative z-10">
-                <select 
-                    value={eventFilter}
-                    onChange={e => setEventFilter(e.target.value)}
-                    className="bg-slate-800 text-slate-300 rounded-xl px-4 py-2 border border-slate-700 text-xs font-bold uppercase tracking-widest focus:outline-none focus:border-indigo-500 transition-all cursor-pointer"
-                >
-                    <option value="UPCOMING">Upcoming</option>
-                    <option value="ALL">All Events</option>
-                    <option value="COLLEGE">College Events</option>
-                    <option value="CLUB">Club Events</option>
-                    <option value="COMPLETED">Completed</option>
-                    <option value="CANCELLED">Cancelled</option>
-                </select>
+            <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none relative z-10" style={{scrollbarWidth:"none"}}>
+                {[
+                    { id: 'UPCOMING', label: 'Upcoming', icon: '📅' },
+                    { id: 'ALL', label: 'All Events', icon: '📋' },
+                    { id: 'COLLEGE', label: 'College', icon: '🏫' },
+                    { id: 'CLUB', label: 'Club', icon: '🏛️' },
+                    { id: 'COMPLETED', label: 'Completed', icon: '✅' },
+                    { id: 'CANCELLED', label: 'Cancelled', icon: '❌' },
+                ].map(opt => (
+                    <button key={opt.id}
+                        onClick={() => setEventFilter(opt.id)}
+                        className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-medium transition-all min-h-[40px] whitespace-nowrap ${
+                            eventFilter === opt.id
+                                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
+                                : "bg-slate-800 text-slate-400 border border-slate-700"
+                        }`}>
+                        <span>{opt.icon}</span>
+                        <span>{opt.label}</span>
+                    </button>
+                ))}
             </div>            <div className="space-y-12 relative z-10">
                 <div className="space-y-6">
                     <h2 className="text-xl font-display font-black text-white/50 italic flex items-center gap-3">

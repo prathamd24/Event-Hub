@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { toast } from './Toast';
 
 export default function NotificationBell() {
     const { user } = useAuth();
@@ -9,12 +10,26 @@ export default function NotificationBell() {
     const [unreadCount, setUnreadCount] = useState(0);
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef(null);
+    const seenIdsRef = useRef(new Set());
+    const isFirstLoadRef = useRef(true);
 
     const fetchNotifications = async () => {
         if (!user) return;
         try {
             const res = await api.get('/api/notifications');
-            setNotifications(res.data.notifications || res.data || []);
+            const newNotifs = res.data.notifications || res.data || [];
+            
+            if (!isFirstLoadRef.current) {
+                const newUnread = newNotifs.filter(n => !n.isRead && !seenIdsRef.current.has(n.id));
+                newUnread.slice(0, 3).forEach(n => {
+                    toast(n.title, 'info');
+                });
+            }
+            
+            seenIdsRef.current = new Set(newNotifs.map(n => n.id));
+            isFirstLoadRef.current = false;
+
+            setNotifications(newNotifs);
             setUnreadCount(res.data.unreadCount || 0);
         } catch (err) {
             console.error('Error fetching notifications:', err);
@@ -26,6 +41,22 @@ export default function NotificationBell() {
         const interval = setInterval(fetchNotifications, 30000); // Poll every 30s
         return () => clearInterval(interval);
     }, [user]);
+
+    // Mark all as read IMMEDIATELY when opening the dropdown
+    const handleBellClick = async () => {
+        const wasOpen = isOpen;
+        setIsOpen(prev => !prev);
+        if (!wasOpen && unreadCount > 0) {
+            try {
+                await api.post('/api/notifications/read-all');
+                setUnreadCount(0);
+                setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+            } catch (e) {
+                console.error('Mark all read failed:', e);
+            }
+        }
+    };
+
 
     useEffect(() => {
         function handleClickOutside(event) {
@@ -62,12 +93,31 @@ export default function NotificationBell() {
     return (
         <div className="relative" ref={dropdownRef}>
             <button
-                onClick={() => setIsOpen(!isOpen)}
-                className="relative p-2 rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-all duration-300"
+                onClick={handleBellClick}
+                className={`relative p-2.5 rounded-xl transition-all duration-300 group ${
+                    unreadCount > 0
+                        ? 'text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 shadow-[0_0_14px_rgba(99,102,241,0.25)]'
+                        : 'text-slate-400 hover:text-white hover:bg-white/10'
+                }`}
             >
-                <span className="text-xl">🔔</span>
+                {/* SVG Bell Icon */}
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className={`w-5 h-5 transition-transform duration-300 ${unreadCount > 0 ? 'group-hover:rotate-12' : 'group-hover:scale-110'}`}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                >
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                </svg>
+
+                {/* Unread Badge */}
                 {unreadCount > 0 && (
-                    <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-[#0f172a] animate-pulse">
+                    <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-gradient-to-br from-red-500 to-rose-600 flex items-center justify-center text-white text-[9px] font-black border-2 border-[#0f172a] shadow-[0_0_8px_rgba(239,68,68,0.5)] animate-pulse">
                         {unreadCount > 9 ? '9+' : unreadCount}
                     </span>
                 )}
@@ -97,14 +147,20 @@ export default function NotificationBell() {
                         ) : (
                             <div className="flex flex-col">
                                 {notifications.map(n => (
-                                    <Link
+                                    <div
                                         key={n.id}
-                                        to={n.link || '#'}
-                                        onClick={() => {
-                                            if (!n.isRead) markAsRead(n.id);
-                                            setIsOpen(false);
+                                        onClick={async () => {
+                                            // Mark as read only — no navigation
+                                            if (!n.isRead) {
+                                                try {
+                                                    await api.post(`/api/notifications/${n.id}/read`);
+                                                    setNotifications(prev =>
+                                                        prev.map(x => x.id === n.id ? { ...x, isRead: true } : x)
+                                                    );
+                                                } catch (e) {}
+                                            }
                                         }}
-                                        className={`group block p-5 transition-all duration-200 hover:bg-white/[0.03] border-b border-white/5 last:border-0 ${!n.isRead ? 'bg-indigo-500/5' : ''}`}
+                                        className={`group cursor-pointer p-5 transition-all duration-200 hover:bg-white/[0.03] border-b border-white/5 last:border-0 ${!n.isRead ? 'bg-indigo-500/5' : ''}`}
                                     >
                                         <div className="flex gap-4">
                                             <div className="mt-1">
@@ -114,7 +170,8 @@ export default function NotificationBell() {
                                                     {n.type === 'EVENT_OFFER' ? '🎁' : 
                                                      n.type === 'OFFER_ACCEPTED' ? '✅' :
                                                      n.type === 'NEW_REGISTRATION' ? '✍️' : 
-                                                     n.type === 'BROADCAST' ? '📢' : '🔔'}
+                                                     n.type === 'BROADCAST' ? '📢' : 
+                                                     n.type === 'ACTIVITY' ? '🏛️' : '🔔'}
                                                 </div>
                                             </div>
                                             <div className="flex-1 min-w-0">
@@ -136,16 +193,16 @@ export default function NotificationBell() {
                                                 </p>
                                             </div>
                                         </div>
-                                    </Link>
+                                    </div>
                                 ))}
                             </div>
                         )}
                     </div>
 
                     <div className="p-4 border-t border-white/5 bg-white/5 text-center">
-                        <button className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 hover:text-white transition-all">
-                            View all activity
-                        </button>
+                        <Link to="/notifications" onClick={() => setIsOpen(false)} className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 hover:text-white transition-all">
+                            View all notifications →
+                        </Link>
                     </div>
                 </div>
             )}

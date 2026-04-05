@@ -3,6 +3,7 @@ import api from '../../services/api';
 import { toast } from '../Toast';
 import { BACKEND_URL } from '../../config';
 import LoadingSpinner from '../LoadingSpinner';
+import { exportToExcel } from '../../utils/exportToExcel';
 
 export default function EventRegistrationsModal({ event, isOpen, onClose, role = 'college', clubId }) {
     const [activeTab, setActiveTab] = useState('individual');
@@ -144,6 +145,40 @@ export default function EventRegistrationsModal({ event, isOpen, onClose, role =
         }
     };
 
+    const handleExport = () => {
+        if (activeTab === 'individual') {
+            const dataToExport = registrations.filter(r => !r.teamName).map(r => ({
+                Name: r.studentName || r.name,
+                Email: r.studentEmail || r.email,
+                Event: r.eventTitle || r.event,
+                Status: r.status || r.paymentStatus,
+                RegisteredAt: new Date(r.registeredAt).toLocaleString()
+            }));
+            exportToExcel(dataToExport, `${event.title || 'Event'}_Individuals`);
+        } else {
+            const exportData = [];
+            teams.forEach(team => {
+                exportData.push({
+                    TeamName: team.teamName,
+                    Role: 'Leader',
+                    Name: team.leaderName || team.leader,
+                    Email: team.leaderEmail,
+                    Status: team.status
+                });
+                team.members?.forEach(member => {
+                    exportData.push({
+                        TeamName: team.teamName,
+                        Role: 'Member',
+                        Name: member.name || member.invitedName,
+                        Email: member.email || member.invitedEmail,
+                        Status: team.status
+                    });
+                });
+            });
+            exportToExcel(exportData, `${event.title || 'Event'}_Teams`);
+        }
+    };
+
     if (!isOpen) return null;
 
     function renderMemberRow({
@@ -244,10 +279,10 @@ export default function EventRegistrationsModal({ event, isOpen, onClose, role =
     }
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
             <div className="absolute inset-0 bg-[#020617]/90 backdrop-blur-sm" onClick={onClose}></div>
             
-            <div className="relative w-full max-w-4xl bg-[#0f172a] rounded-[2.5rem] border border-white/10 shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
+            <div className="relative w-full sm:max-w-4xl bg-[#0f172a] rounded-t-[2.5rem] sm:rounded-[2.5rem] border border-white/10 shadow-2xl overflow-hidden animate-slideUp sm:animate-fadeIn max-h-[90vh] sm:max-h-none flex flex-col pb-8 sm:pb-0">
                 {/* Header */}
                 <div className="p-8 border-b border-white/5 bg-white/[0.02]">
                     <div className="flex justify-between items-start mb-6">
@@ -268,7 +303,7 @@ export default function EventRegistrationsModal({ event, isOpen, onClose, role =
                                 onClick={() => setActiveTab('individual')}
                                 className={`px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'individual' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/25 border border-indigo-400/50' : 'bg-white/5 text-slate-400 border border-white/5 hover:bg-white/10'}`}
                             >
-                                Individual ({registrations.length})
+                                Individual ({registrations.filter(r => !r.teamName).length})
                             </button>
                         )}
                         {event.registrationType !== 'INDIVIDUAL' && (
@@ -279,6 +314,12 @@ export default function EventRegistrationsModal({ event, isOpen, onClose, role =
                                 Teams ({teams.length})
                             </button>
                         )}
+                        <button
+                            onClick={handleExport}
+                            className="px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 ml-auto flex items-center gap-2"
+                        >
+                            📊 Export Excel
+                        </button>
                     </div>
 
                 </div>
@@ -293,12 +334,17 @@ export default function EventRegistrationsModal({ event, isOpen, onClose, role =
                         <div className="space-y-4">
                             {registrations.length > 0 ? (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {registrations.map(reg => (
+                                    {registrations.filter(r => !r.teamName).map(reg => (
                                         <div key={reg.id} className="p-4 bg-white/5 rounded-2xl border border-white/10 flex items-center justify-between hover:border-indigo-500/30 transition-all">
                                             <div className="flex items-center gap-4">
                                                 <div>
                                                     <h4 className="text-white font-bold text-sm">{reg.studentName}</h4>
                                                     <p className="text-slate-500 text-[10px]">{reg.studentEmail}</p>
+                                                    {reg.teamName && (
+                                                        <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                                                            Team: {reg.teamName}
+                                                        </span>
+                                                    )}
                                                     <p className="text-[8px] text-slate-600 mt-1 uppercase font-black">{new Date(reg.registeredAt).toLocaleString()}</p>
                                                 </div>
                                             </div>

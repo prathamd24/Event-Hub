@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
 import { toast } from '../components/Toast';
-import { createUserWithEmailAndPassword, signInWithRedirect, getRedirectResult } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
 
 export default function RegisterCollegePage() {
@@ -15,41 +15,8 @@ export default function RegisterCollegePage() {
     const navigate = useNavigate();
 
     useEffect(() => {
-        // Check for redirect result
-        const checkRedirect = async () => {
-            try {
-                const result = await getRedirectResult(auth);
-                if (result) {
-                    setLoading(true);
-                    const user = result.user;
-
-                    // Retrieve stored form data
-                    const storedFormData = sessionStorage.getItem('pending_college_reg_form');
-                    const parsedData = storedFormData ? JSON.parse(storedFormData) : {};
-
-                    const submitData = {
-                        ...parsedData,
-                        adminName: user.displayName || 'Google User',
-                        adminEmail: user.email,
-                        password: 'FIREBASE_AUTH',
-                        confirmPassword: 'FIREBASE_AUTH'
-                    };
-
-                    await api.post('/api/auth/register-college', submitData);
-                    setSuccess(true);
-                    toast('College registration submitted successfully!', 'success');
-                    
-                    // Clear storage
-                    sessionStorage.removeItem('pending_college_reg_form');
-                }
-            } catch (err) {
-                console.error('Redirect registration error:', err);
-                toast(err.message || 'Registration failed', 'error');
-            } finally {
-                setLoading(false);
-            }
-        };
-        checkRedirect();
+        const err = sessionStorage.getItem('pending_register_college_error');
+        if (err) { toast(err, 'error'); sessionStorage.removeItem('pending_register_college_error'); }
     }, []);
 
     const handleChange = (e) => setFormData(p => ({ ...p, [e.target.name]: e.target.value }));
@@ -69,12 +36,29 @@ export default function RegisterCollegePage() {
 
         setLoading(true);
         try {
-            // Store current form state before redirect
-            sessionStorage.setItem('pending_college_reg_form', JSON.stringify(formData));
-            await signInWithRedirect(auth, googleProvider);
+            const result = await signInWithPopup(auth, googleProvider);
+            const idToken = await result.user.getIdToken();
+
+            await api.post('/api/auth/register-college', {
+                ...formData,
+                adminName: result.user.displayName || result.user.email?.split('@')[0] || 'Admin',
+                adminEmail: result.user.email,
+                password: 'FIREBASE_AUTH',
+                confirmPassword: 'FIREBASE_AUTH'
+            }, {
+                headers: { Authorization: `Bearer ${idToken}` }
+            });
+            setSuccess(true);
+            toast('College registration submitted for review! ✅', 'success');
+            // Sign out since college needs approval first
+            await auth.signOut();
         } catch (err) {
-            console.error('Google registration redirect error:', err);
-            toast(err.message || 'Registration failed', 'error');
+            if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+                setLoading(false); return;
+            }
+            console.error('College registration error:', err);
+            toast(err.response?.data?.error || err.message || 'Registration failed', 'error');
+        } finally {
             setLoading(false);
         }
     };
@@ -135,7 +119,7 @@ export default function RegisterCollegePage() {
                 </div>
                 <h2 className="text-3xl font-bold text-white mb-4">Registration Submitted!</h2>
                 <div className="space-y-3 text-slate-300 mb-8">
-                    <p>Your college registration has been successfully submitted to the College Event Hub.</p>
+                    <p>Your college registration has been successfully submitted to Event Hub.</p>
                     <p className="font-medium text-amber-400">Our platform administrators will review and approve your college shortly.</p>
                     <p>You will be able to log in to your College Admin dashboard once approved.</p>
                 </div>

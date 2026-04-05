@@ -1,9 +1,8 @@
 import axios from 'axios';
 import { auth } from '../firebase';
-import { BACKEND_URL } from '../config';
 
 const api = axios.create({
-    baseURL: BACKEND_URL,
+    baseURL: 'http://localhost:8080',
 });
 
 api.interceptors.request.use(async (config) => {

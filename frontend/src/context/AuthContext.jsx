@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 import api from '../services/api';
+import { toast } from '../components/Toast';
 
 const AuthContext = createContext();
 
@@ -23,23 +24,34 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             if (firebaseUser) {
+                // If a registration is in progress, skip fetching — the user doesn't exist in our DB yet.
+                if (sessionStorage.getItem('registration_in_progress') === 'true') {
+                    console.log('[AuthContext] Registration in progress — skipping /api/auth/me');
+                    setLoading(false);
+                    return;
+                }
                 try {
                     const res = await api.get('/api/auth/me');
                     const userData = res.data;
                     setUser(userData);
-                    
-                    // If student, check if they are a coordinator
-                    if (userData.role === 'STUDENT') {
-                        await checkSCStatus();
-                    } else {
-                        setScClub(null);
-                    }
+                    if (userData.role === 'STUDENT') await checkSCStatus();
+                    else setScClub(null);
                 } catch (error) {
-                    console.error('Failed to fetch user data from backend', error);
+                    console.error('[AuthContext] /api/auth/me failed:', error?.response?.status, error?.response?.data);
+
                     if (error.response?.status === 403 && error.response.data?.blocked) {
                         window.location.href = `/college-blocked?reason=${error.response.data.reason}&message=${encodeURIComponent(error.response.data.message)}`;
                         return;
                     }
+
+                    // User is in Firebase but NOT in our DB (unregistered or deleted).
+                    // MUST sign out of Firebase to prevent the popup from auto-resolving
+                    // with this stale session on next login attempt — the bypass loophole.
+                    if (error.response?.status === 404 || error.response?.status === 401) {
+                        console.log('[AuthContext] Unregistered Firebase user — clearing session.');
+                        try { await signOut(auth); } catch (_) {}
+                    }
+
                     setUser(null);
                     setScClub(null);
                 }
@@ -49,14 +61,11 @@ export const AuthProvider = ({ children }) => {
             }
             setLoading(false);
         });
-
         return () => unsubscribe();
     }, []);
 
-    // Apply theme to <html> element
     useEffect(() => {
-        const root = document.documentElement;
-        root.setAttribute('data-theme', theme);
+        document.documentElement.setAttribute('data-theme', theme);
         localStorage.setItem('theme', theme);
     }, [theme]);
 

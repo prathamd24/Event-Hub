@@ -8,6 +8,7 @@ import { BACKEND_URL } from '../config';
 import RegisterEventModal from '../components/modals/RegisterEventModal';
 import TeamRegisterModal from '../components/modals/TeamRegisterModal';
 import TeamStatusModal from '../components/modals/TeamStatusModal';
+import Footer from '../components/Footer';
 
 const BASE = BACKEND_URL;
 
@@ -804,6 +805,8 @@ export default function EventDetailPage() {
                     onUpdate={fetchEventAndStatus}
                 />
             )}
+            {/* Premium Footer */}
+            <Footer />
         </div>
     );
 }

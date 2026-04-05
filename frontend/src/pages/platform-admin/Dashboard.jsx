@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pi
 import api from '../../services/api';
 import { toast } from '../../components/Toast';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import { AnalyticsTab, AskAITab, GodModeTab, EditModal, DeleteConfirm } from './NewTabs';
 
 const statusColors = {
     APPROVED:  'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
@@ -20,6 +21,10 @@ const TABS = [
     { id: 'clubs',     label: 'Clubs',     icon: '🎪' },
     { id: 'events',    label: 'Events',    icon: '📅' },
     { id: 'users',     label: 'Users',     icon: '👥' },
+    { id: 'feedback',  label: 'Feedback',  icon: '⭐' },
+    { id: 'analytics', label: 'Analytics', icon: '📊' },
+    { id: 'ask-ai',    label: 'Ask AI',    icon: '🤖' },
+    { id: 'god-mode',  label: 'God Mode',  icon: '⚡' },
 ];
 
 const PIE_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#8b5cf6'];
@@ -75,9 +80,27 @@ export default function PlatformAdminDashboard() {
     const [clubs, setClubs] = useState([]);
     const [events, setEvents] = useState([]);
     const [users, setUsers] = useState([]);
+    const [feedbacks, setFeedbacks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [hasMounted, setHasMounted] = useState(false);
     const [tabLoading, setTabLoading] = useState({});
+
+    // Analytics
+    const [liveFeed, setLiveFeed] = useState([]);
+    const [telStats, setTelStats] = useState(null);
+
+    // Ask AI
+    const [aiQuestion, setAiQuestion] = useState('');
+    const [aiLoading, setAiLoading] = useState(false);
+    const [aiHistory, setAiHistory] = useState([]);
+
+    // God Mode sub-tab
+    const [godTab, setGodTab] = useState('colleges');
+    const [editModal, setEditModal] = useState(null);   // { type, item }
+    const [editForm, setEditForm] = useState({});
+    const [broadcastForm, setBroadcastForm] = useState({ title: '', message: '' });
+    const [dbHealth, setDbHealth] = useState(null);
+    const [confirmDelete, setConfirmDelete] = useState(null); // { type, id, name }
 
     useEffect(() => {
         const timer = setTimeout(() => setHasMounted(true), 500);
@@ -97,10 +120,19 @@ export default function PlatformAdminDashboard() {
     useEffect(() => {
         const refreshAll = () => {
             fetchStats();
-            // Also refresh active tab data
             if (activeTab === 'clubs') api.get('/api/platform-admin/all-clubs').then(r => setClubs(r.data)).catch(() => {});
             if (activeTab === 'events') api.get('/api/platform-admin/all-events').then(r => setEvents(r.data)).catch(() => {});
             if (activeTab === 'users') api.get('/api/platform-admin/users').then(r => setUsers(r.data)).catch(() => {});
+            if (activeTab === 'feedback') api.get('/api/feedback/all').then(r => setFeedbacks(r.data)).catch(() => {});
+            if (activeTab === 'analytics') {
+                api.get('/api/telemetry/live-feed').then(r => setLiveFeed(r.data)).catch(() => {});
+                api.get('/api/telemetry/stats').then(r => setTelStats(r.data)).catch(() => {});
+            }
+            if (activeTab === 'god-mode') {
+                api.get('/api/platform-admin/all-clubs').then(r => setClubs(r.data)).catch(() => {});
+                api.get('/api/platform-admin/all-events').then(r => setEvents(r.data)).catch(() => {});
+                api.get('/api/platform-admin/users').then(r => setUsers(r.data)).catch(() => {});
+            }
         };
 
         refreshAll();
@@ -132,6 +164,31 @@ export default function PlatformAdminDashboard() {
             setTabLoading(p => ({ ...p, users: true }));
             try { const r = await api.get('/api/platform-admin/users'); setUsers(r.data); } catch (e) { } finally { setTabLoading(p => ({ ...p, users: false })); }
         }
+        if (tab === 'feedback' && feedbacks.length === 0) {
+            setTabLoading(p => ({ ...p, feedback: true }));
+            try { const r = await api.get('/api/feedback/all'); setFeedbacks(r.data); } catch (e) { } finally { setTabLoading(p => ({ ...p, feedback: false })); }
+        }
+        if (tab === 'analytics') {
+            setTabLoading(p => ({ ...p, analytics: true }));
+            try {
+                const [f, s] = await Promise.all([
+                    api.get('/api/telemetry/live-feed'),
+                    api.get('/api/telemetry/stats'),
+                ]);
+                setLiveFeed(f.data); setTelStats(s.data);
+            } catch (e) { } finally { setTabLoading(p => ({ ...p, analytics: false })); }
+        }
+        if (tab === 'god-mode') {
+            setTabLoading(p => ({ ...p, godmode: true }));
+            try {
+                const [cl, ev, us] = await Promise.all([
+                    api.get('/api/platform-admin/all-clubs'),
+                    api.get('/api/platform-admin/all-events'),
+                    api.get('/api/platform-admin/users'),
+                ]);
+                setClubs(cl.data); setEvents(ev.data); setUsers(us.data);
+            } catch (e) { } finally { setTabLoading(p => ({ ...p, godmode: false })); }
+        }
     };
 
     const switchTab = (tab) => { setActiveTab(tab); fetchTab(tab); };
@@ -148,6 +205,86 @@ export default function PlatformAdminDashboard() {
             setUsers(prev => prev.map(u => u.id === id ? { ...u, isActive: r.data.is_active } : u));
             toast('User updated', 'success');
         } catch { toast('Failed', 'error'); }
+    };
+
+    // ── GOD MODE HANDLERS ───────────────────────────────────────────────────
+    const openEdit = (type, item) => {
+        setEditModal({ type, item });
+        setEditForm({ ...item });
+    };
+    const closeEdit = () => { setEditModal(null); setEditForm({}); };
+
+    const handleSaveEdit = async () => {
+        const { type, item } = editModal;
+        const urlMap = {
+            college: `/api/platform-admin/colleges/${item.id}`,
+            club:    `/api/platform-admin/clubs/${item.id}`,
+            event:   `/api/platform-admin/events/${item.id}`,
+        };
+        try {
+            await api.put(urlMap[type], editForm);
+            toast(`${type} updated ✓`, 'success');
+            closeEdit();
+            // refresh entity list
+            if (type === 'college') { const r = await api.get('/api/platform-admin/colleges'); setColleges(r.data); fetchStats(); }
+            if (type === 'club')    { const r = await api.get('/api/platform-admin/all-clubs'); setClubs(r.data); }
+            if (type === 'event')   { const r = await api.get('/api/platform-admin/all-events'); setEvents(r.data); }
+        } catch { toast('Save failed', 'error'); }
+    };
+
+    const handleDeleteConfirmed = async () => {
+        const { type, id } = confirmDelete;
+        const urlMap = {
+            college: `/api/platform-admin/colleges/${id}`,
+            club:    `/api/platform-admin/clubs/${id}`,
+            event:   `/api/platform-admin/events/${id}`,
+        };
+        try {
+            await api.delete(urlMap[type]);
+            toast(`Deleted ✓`, 'success');
+            setConfirmDelete(null);
+            if (type === 'college') { fetchStats(); }
+            if (type === 'club')    { const r = await api.get('/api/platform-admin/all-clubs'); setClubs(r.data); }
+            if (type === 'event')   { const r = await api.get('/api/platform-admin/all-events'); setEvents(r.data); }
+        } catch { toast('Delete failed', 'error'); }
+    };
+
+    const handleChangeRole = async (userId, newRole) => {
+        try {
+            await api.put(`/api/platform-admin/users/${userId}/role`, { role: newRole });
+            setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
+            toast('Role changed ✓', 'success');
+        } catch { toast('Failed', 'error'); }
+    };
+
+    const handleBroadcast = async () => {
+        if (!broadcastForm.title || !broadcastForm.message) { toast('Fill title + message', 'error'); return; }
+        try {
+            const r = await api.post('/api/platform-admin/broadcast-all', broadcastForm);
+            toast(`Broadcast sent to ${r.data.count} users ✓`, 'success');
+            setBroadcastForm({ title: '', message: '' });
+        } catch { toast('Broadcast failed', 'error'); }
+    };
+
+    const loadDbHealth = async () => {
+        try { const r = await api.get('/api/platform-admin/db-health'); setDbHealth(r.data); }
+        catch { toast('DB health check failed', 'error'); }
+    };
+
+    // ── ASK AI ──────────────────────────────────────────────────────────────
+    const handleAskAI = async (q) => {
+        const question = q || aiQuestion.trim();
+        if (!question) return;
+        setAiLoading(true);
+        setAiHistory(prev => [...prev, { role: 'user', text: question }]);
+        setAiQuestion('');
+        try {
+            const r = await api.post('/api/telemetry/ask', { question });
+            setAiHistory(prev => [...prev, { role: 'ai', data: r.data }]);
+        } catch (e) {
+            const msg = e.response?.data?.error || 'AI request failed';
+            setAiHistory(prev => [...prev, { role: 'error', text: msg }]);
+        } finally { setAiLoading(false); }
     };
 
     if (loading) return <LoadingSpinner />;
@@ -196,7 +333,7 @@ export default function PlatformAdminDashboard() {
                 <div>
                     <p className="text-slate-400 text-sm mb-1">Platform Administration</p>
                     <h1 className="text-4xl font-display font-black text-white">Control Panel</h1>
-                    <p className="text-slate-400 mt-1">Monitor and manage the entire EventHub platform.</p>
+                    <p className="text-slate-400 mt-1">Monitor and manage the entire Event Hub platform.</p>
                 </div>
                 <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-2xl shadow-[0_0_30px_rgba(99,102,241,0.3)]">
                     ⚡
@@ -454,6 +591,98 @@ export default function PlatformAdminDashboard() {
                     )}
                 </div>
             )}
+
+            {/* ═══ FEEDBACK TAB ═══ */}
+            {activeTab === 'feedback' && (
+                <div className="space-y-6 animate-fadeIn">
+                    <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 flex items-center justify-between">
+                        <div>
+                            <h2 className="text-2xl font-black text-white mb-1">User Feedback</h2>
+                            <p className="text-slate-400 text-sm">Average Platform Rating: 
+                                <span className="ml-2 text-amber-400 font-bold">
+                                    {feedbacks.length > 0 
+                                        ? (feedbacks.reduce((acc, f) => acc + f.rating, 0) / feedbacks.length).toFixed(1) 
+                                        : '0.0'} ⭐
+                                </span>
+                            </p>
+                        </div>
+                        <div className="text-slate-500 text-xs italic">Total Responses: {feedbacks.length}</div>
+                    </div>
+
+                    {tabLoading.feedback ? <LoadingSpinner /> : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {feedbacks.length > 0 ? feedbacks.map(f => (
+                                <div key={f.id} className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2rem] p-6 hover:bg-white/10 transition-all group">
+                                    <div className="flex items-start justify-between mb-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold border border-indigo-500/20">
+                                                {f.userName?.[0] || '?'}
+                                            </div>
+                                            <div>
+                                                <p className="text-white font-bold text-sm">{f.userName}</p>
+                                                <p className="text-slate-500 text-[10px] uppercase tracking-widest">{new Date(f.createdAt).toLocaleDateString()}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-0.5">
+                                            {[1, 2, 3, 4, 5].map(star => (
+                                                <span key={star} className={`text-sm ${f.rating >= star ? 'text-amber-400' : 'text-slate-700'}`}>★</span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <p className="text-slate-300 text-sm leading-relaxed italic">"{f.comment || 'No comment provided.'}"</p>
+                                </div>
+                            )) : (
+                                <div className="col-span-full text-center py-20 text-slate-500 bg-white/5 rounded-3xl border border-white/10 border-dashed italic">
+                                    No feedback has been submitted yet.
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ═══ ANALYTICS TAB ═══ */}
+            {activeTab === 'analytics' && (
+                <AnalyticsTab
+                    telStats={telStats}
+                    liveFeed={liveFeed}
+                    hasMounted={hasMounted}
+                    tabLoading={tabLoading}
+                />
+            )}
+
+            {/* ═══ ASK AI TAB ═══ */}
+            {activeTab === 'ask-ai' && (
+                <AskAITab
+                    aiQuestion={aiQuestion}
+                    setAiQuestion={setAiQuestion}
+                    aiLoading={aiLoading}
+                    aiHistory={aiHistory}
+                    handleAskAI={handleAskAI}
+                />
+            )}
+
+            {/* ═══ GOD MODE TAB ═══ */}
+            {activeTab === 'god-mode' && (
+                <GodModeTab
+                    colleges={colleges} clubs={clubs} events={events} users={users}
+                    godTab={godTab} setGodTab={setGodTab}
+                    openEdit={openEdit} setConfirmDelete={setConfirmDelete}
+                    handleToggleUser={handleToggleUser} handleChangeRole={handleChangeRole}
+                    broadcastForm={broadcastForm} setBroadcastForm={setBroadcastForm} handleBroadcast={handleBroadcast}
+                    dbHealth={dbHealth} loadDbHealth={loadDbHealth}
+                />
+            )}
+
+            {/* Shared overlays */}
+            <EditModal
+                editModal={editModal} editForm={editForm} setEditForm={setEditForm}
+                closeEdit={closeEdit} handleSaveEdit={handleSaveEdit}
+            />
+            <DeleteConfirm
+                confirmDelete={confirmDelete} setConfirmDelete={setConfirmDelete}
+                handleDeleteConfirmed={handleDeleteConfirmed}
+            />
         </div>
     );
 }

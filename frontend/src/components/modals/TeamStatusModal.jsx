@@ -67,8 +67,8 @@ export default function TeamStatusModal({ isOpen, onClose, teamId, onUpdate }) {
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 overflow-y-auto font-sans">
-            <div className="bg-[#0f172a] border border-white/10 rounded-[2.5rem] w-full max-w-xl shadow-[0_0_80px_-20px_rgba(99,102,241,0.3)] overflow-hidden animate-fadeIn relative my-8">
+        <div className="fixed inset-0 z-[150] flex items-end sm:items-center justify-center bg-black/90 backdrop-blur-md p-0 sm:p-4 overflow-hidden font-sans">
+            <div className="bg-[#0f172a] border border-white/10 rounded-t-[2.5rem] sm:rounded-[2.5rem] w-full sm:max-w-xl shadow-[0_0_80px_-20px_rgba(99,102,241,0.3)] overflow-y-auto animate-slideUp sm:animate-fadeIn relative my-0 sm:my-8 max-h-[90vh] pb-8 sm:pb-0">
                 <div className="absolute -top-32 -right-32 w-80 h-80 bg-indigo-500/10 rounded-full blur-[100px] pointer-events-none" />
                 <div className="absolute -bottom-32 -left-32 w-80 h-80 bg-purple-500/10 rounded-full blur-[100px] pointer-events-none" />
                 

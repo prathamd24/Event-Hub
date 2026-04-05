@@ -24,6 +24,7 @@ export default function StudentCoordinatorDashboard() {
     
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState("events");
+    const [eventTab, setEventTab] = useState("upcoming"); // Section 3A
     
     // Broadcast Form State
     const [broadcastMsg, setBroadcastMsg] = useState("");
@@ -168,8 +169,24 @@ export default function StudentCoordinatorDashboard() {
             {/* Tab Secret Content */}
             <div className="animate-fadeIn">
                 {activeTab === "events" && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {events.map(event => (
+                    <div>
+                      {/* Section 3A — Past/Upcoming filter */}
+                      <div className="flex gap-1 p-1 bg-slate-800/50 rounded-xl border border-slate-700/50 mb-4 w-fit">
+                        <button onClick={() => setEventTab("upcoming")}
+                          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${eventTab==="upcoming" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-white"}`}>
+                          📅 Upcoming
+                        </button>
+                        <button onClick={() => setEventTab("past")}
+                          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${eventTab==="past" ? "bg-slate-600 text-white" : "text-slate-400 hover:text-white"}`}>
+                          📜 Past
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {events
+                          .filter(e => eventTab === "upcoming"
+                            ? ["UPCOMING","ONGOING"].includes(e.status)
+                            : e.status === "COMPLETED")
+                          .map(event => (
                             <div key={event.id} className="bg-slate-900/50 border border-white/5 rounded-[2.5rem] p-6 hover:border-indigo-500/30 hover:bg-slate-800/50 transition-all flex flex-col h-full group">
                                 <div className="flex items-center gap-4 mb-4">
                                     <div className="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center text-xl shadow-inner">{event.icon || "📅"}</div>
@@ -183,7 +200,7 @@ export default function StudentCoordinatorDashboard() {
                                         <span className="text-slate-500 text-[10px] uppercase font-bold">Venue</span>
                                         <span className="text-slate-300 text-[10px] font-bold truncate ml-4">{event.venue}</span>
                                     </div>
-                                    <Link 
+                                    <Link
                                         to={`/sc/events/${event.id}/manage`}
                                         className="w-full py-3 bg-white/5 hover:bg-white text-white hover:text-slate-950 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all text-center flex items-center justify-center gap-2 group-hover:scale-[1.02]"
                                     >
@@ -191,13 +208,18 @@ export default function StudentCoordinatorDashboard() {
                                     </Link>
                                 </div>
                             </div>
-                        ))}
-                        {events.length === 0 && (
+                          ))}
+                        {events.filter(e => eventTab === "upcoming"
+                          ? ["UPCOMING","ONGOING"].includes(e.status)
+                          : e.status === "COMPLETED").length === 0 && (
                             <div className="col-span-full py-20 text-center bg-slate-900/40 rounded-[2.5rem] border border-dashed border-white/5 shadow-inner">
                                 <div className="text-5xl mb-6 opacity-20">📅</div>
-                                <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">No events assigned to your club yet</p>
+                                <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">
+                                  {eventTab === "upcoming" ? "No upcoming events" : "No past events"}
+                                </p>
                             </div>
                         )}
+                      </div>
                     </div>
                 )}
 

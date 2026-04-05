@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 
 export default function Sidebar({ links }) {
     return (
-        <aside className="fixed bottom-0 left-0 w-full z-50 bg-[#0B0F19]/95 backdrop-blur-xl border-t border-white/10 md:relative md:w-64 md:bg-white/5 md:min-h-[calc(100vh-64px)] md:border-t-0 md:border-r md:p-6 md:pt-8 md:shrink-0 flex md:block">
+        <aside className="fixed bottom-0 left-0 w-full z-50 bg-[#0f172a]/95 backdrop-blur-xl border-t border-white/10 md:relative md:w-full md:bg-transparent md:border-none md:p-6 flex md:block">
             <div className="hidden md:block absolute top-0 left-0 w-32 h-64 bg-indigo-500/10 rounded-full blur-[80px] pointer-events-none" />
             
             <nav className="flex flex-row w-full justify-around items-center p-2 md:p-0 md:space-y-2 md:flex-col md:relative md:z-10 overflow-x-auto no-scrollbar gap-1">

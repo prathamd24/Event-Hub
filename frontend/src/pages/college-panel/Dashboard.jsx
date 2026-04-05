@@ -58,6 +58,12 @@ export default function CollegeAdminDashboard() {
   const [selectedEvent,      setSelectedEvent]      = useState(null)
   const [selectedClubEvents, setSelectedClubEvents] = useState([])
   const [showRegsModal,      setShowRegsModal]      = useState(false)
+  // Registrations tab state
+  const [allRegistrations,   setAllRegistrations]   = useState({ individuals: [], teams: [] })
+  const [regClubFilter,      setRegClubFilter]      = useState("ALL")
+  const [regEventFilter,     setRegEventFilter]     = useState("ALL")
+  const [regSubTab,          setRegSubTab]          = useState("individual")
+  const [regLoading,         setRegLoading]         = useState(false)
 
   // Fetch Core Data
   const fetchData = async () => {
@@ -81,11 +87,29 @@ export default function CollegeAdminDashboard() {
       setMonthlyData(data.monthlyRegistrations || []);
       setEventsByClub(data.eventsByClub || []);
       setTopEvents(data.topEvents || []);
-      setRecentActivity(data.recentActivity || []);
+      
+      // Fetch recent activity from notifications (Section 1B)
+      try {
+        const activityRes = await api.get("/api/notifications?limit=10");
+        setRecentActivity(activityRes.data.notifications || []);
+      } catch(e2) { /* ignore */ }
     } catch(e) {
       console.error("Stats fetch failed:", e);
     }
   };
+
+  const fetchRegistrations = async () => {
+    setRegLoading(true);
+    try {
+      const { data } = await api.get("/api/club/all-registrations");
+      setAllRegistrations({ individuals: data.individuals || [], teams: data.teams || [] });
+    } catch(e) {
+      console.error("Registrations fetch failed:", e);
+    } finally {
+      setRegLoading(false);
+    }
+  };
+
 
   // Fetch Students
   const fetchStudents = async () => {
@@ -113,12 +137,14 @@ export default function CollegeAdminDashboard() {
       fetchStats();
       if (activeTab === "students") fetchStudents();
       if (activeTab === "history")  fetchHistory();
+      if (activeTab === "registrations") fetchRegistrations();
     };
 
     refreshAll();
-    const interval = setInterval(refreshAll, 10000);
+    const interval = setInterval(refreshAll, 30000); // refresh every 30s
     return () => clearInterval(interval);
   }, [activeTab]);
+
 
   // Handlers (to be integrated or preserved as needed)
   const handleEditClub = (club) => {
@@ -201,7 +227,7 @@ export default function CollegeAdminDashboard() {
 
   if (loading) return <LoadingSpinner />;
 
-  // Stats Card data
+  // Stats Card data — 5 cards only (Section 1A)
   const statCards = [
     {
       label: "Students",
@@ -228,15 +254,7 @@ export default function CollegeAdminDashboard() {
       text: "text-indigo-400",
     },
     {
-      label: "Ongoing",
-      value: stats.ongoingEvents ?? 0,
-      icon: "🔴",
-      color: "from-red-500/20 to-red-600/10",
-      border: "border-red-500/30",
-      text: "text-red-400",
-    },
-    {
-      label: "Upcoming",
+      label: "Upcoming Events",
       value: stats.upcomingEvents ?? 0,
       icon: "⏰",
       color: "from-amber-500/20 to-amber-600/10",
@@ -244,31 +262,25 @@ export default function CollegeAdminDashboard() {
       text: "text-amber-400",
     },
     {
-      label: "Registrations",
-      value: stats.totalRegistrations ?? 0,
-      icon: "📝",
+      label: "Completed Events",
+      value: stats.completedEvents ?? 0,
+      icon: "✅",
       color: "from-emerald-500/20 to-emerald-600/10",
       border: "border-emerald-500/30",
       text: "text-emerald-400",
-    },
-    {
-      label: "Completed",
-      value: stats.completedEvents ?? 0,
-      icon: "✅",
-      color: "from-rose-500/20 to-rose-600/10",
-      border: "border-rose-500/30",
-      text: "text-rose-400",
     }
   ];
 
   const tabs = [
-    { activeTab: "overview", label: "Overview", icon: "📊" },
-    { activeTab: "clubs",    label: "Clubs",    icon: "🏛️" },
-    { activeTab: "events",   label: "Events",   icon: "📅" },
-    { activeTab: "history",  label: "History",  icon: "⏳" },
-    { activeTab: "students", label: "Students", icon: "👥" },
-    { activeTab: "gallery",  label: "Gallery",  icon: "🖼️" },
+    { activeTab: "overview",       label: "Overview",       icon: "📊" },
+    { activeTab: "clubs",          label: "Clubs",          icon: "🏛️" },
+    { activeTab: "events",         label: "Events",         icon: "📅" },
+    { activeTab: "registrations",  label: "Registrations",  icon: "📝" },
+    { activeTab: "history",        label: "History",        icon: "⏳" },
+    { activeTab: "students",       label: "Students",       icon: "👥" },
+    { activeTab: "gallery",        label: "Gallery",        icon: "🖼️" },
   ];
+
 
   // Tab Content Helpers
   const renderStudentsTab = () => (
@@ -486,7 +498,7 @@ export default function CollegeAdminDashboard() {
       </div>
 
       {/* SECTION 2 — STATS GRID */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
         {statCards.map((s, i) => (
           <div key={i}
             className={`rounded-2xl p-4 bg-gradient-to-br ${s.color}
@@ -596,15 +608,18 @@ export default function CollegeAdminDashboard() {
                 Recent Activity
               </h3>
               <div className="space-y-3 max-h-80 overflow-y-auto">
-                {(stats.recentActivity || []).length === 0 ? (
+                {recentActivity.length === 0 ? (
                   <p className="text-slate-500 text-sm text-center py-6">No recent activity</p>
                 ) : (
-                  stats.recentActivity.map((act, i) => (
-                    <div key={i} className="flex gap-3 p-3 rounded-xl bg-slate-700/30 hover:bg-slate-700/50 transition-colors">
-                      <span className="text-lg flex-shrink-0">🔔</span>
+                  recentActivity.map((act, i) => (
+                    <div key={act.id || i} className="flex gap-3 p-3 rounded-xl bg-slate-700/30 hover:bg-slate-700/50 transition-colors">
+                      <span className="text-lg flex-shrink-0">
+                        {act.type === 'NEW_REGISTRATION' ? '✍️' : act.type === 'BROADCAST' ? '📢' : '🔔'}
+                      </span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-slate-300 text-xs leading-relaxed">{act.message}</p>
-                        <p className="text-slate-600 text-xs mt-1">{timeAgo(act.time)}</p>
+                        <p className="text-slate-300 text-xs font-medium leading-relaxed">{act.title}</p>
+                        <p className="text-slate-500 text-xs leading-relaxed">{act.message}</p>
+                        <p className="text-slate-600 text-xs mt-1">{timeAgo(act.createdAt)}</p>
                       </div>
                     </div>
                   ))
@@ -640,33 +655,100 @@ export default function CollegeAdminDashboard() {
               .filter(c => c.name.toLowerCase().includes((clubSearch||"").toLowerCase()))
               .map(club => (
                 <div key={club.id}
-                  className="bg-slate-800/50 rounded-2xl border
-                    border-slate-700/50 overflow-hidden hover:border-slate-600
-                    transition-all group">
-                  <div className="h-24 relative bg-gradient-to-br from-indigo-900/50 to-violet-900/50 overflow-hidden">
-                    {club.coverUrl && <img src={`${BACKEND_URL}${club.coverUrl}`} className="w-full h-full object-cover opacity-60" alt="" />}
-                    <div className="absolute -bottom-5 left-4">
-                      {club.logoUrl ? <img src={`${BACKEND_URL}${club.logoUrl}`} className="w-12 h-12 rounded-xl border-2 border-slate-800 object-cover" alt="" />
-                      : <div className="w-12 h-12 rounded-xl bg-slate-700 border-2 border-slate-800 flex items-center justify-center text-xl">🏛️</div>}
-                    </div>
+                  className="bg-slate-800/60 rounded-2xl border border-slate-700/50 overflow-hidden hover:border-indigo-500/40 hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-200 group">
+
+                  {/* Banner with overlay (Section 1C) */}
+                  <div className="relative h-28 overflow-hidden">
+                    {club.coverUrl ? (
+                      <img src={`${BACKEND_URL}${club.coverUrl}`}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        alt="" />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-indigo-900 to-violet-900" />
+                    )}
+                    <div className="absolute inset-0 bg-black/40" />
+                    {/* Status badge */}
+                    <span className={`absolute top-3 right-3 text-xs px-2 py-1 rounded-full font-medium backdrop-blur-sm ${
+                      club.status === 'APPROVED'
+                        ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/40'
+                        : 'bg-amber-500/30 text-amber-300 border border-amber-500/40'
+                    }`}>{club.status}</span>
                   </div>
-                  <div className="pt-7 px-4 pb-4">
-                    <h3 className="text-white font-semibold text-sm">{club.name}</h3>
-                    <span className="inline-block mt-1 px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 text-xs">{club.category}</span>
-                    <div className="flex gap-4 mt-3 pt-3 border-t border-slate-700/50">
-                      <div className="text-center">
-                        <p className="text-white font-bold text-sm tracking-tighter">{(club.membersCount ?? 0) + (club.studentCount ?? 0)}</p>
-                        <p className="text-slate-500 text-xs">Students</p>
+
+                  <div className="px-4 pb-4">
+                    {/* Logo + Name overlapping banner */}
+                    <div className="flex items-end gap-3 -mt-6 mb-3">
+                      {club.logoUrl ? (
+                        <img src={`${BACKEND_URL}${club.logoUrl}`}
+                          className="w-14 h-14 rounded-xl border-2 border-slate-800 object-cover flex-shrink-0 shadow-lg"
+                          alt="" />
+                      ) : (
+                        <div className="w-14 h-14 rounded-xl border-2 border-slate-800 bg-slate-700 flex items-center justify-center text-2xl flex-shrink-0 shadow-lg">
+                          🏛️
+                        </div>
+                      )}
+                      <div className="pb-1 min-w-0">
+                        <h3 className="text-white font-bold text-sm truncate">{club.name}</h3>
+                        <span className="inline-block mt-0.5 px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 text-xs font-medium">
+                          {club.category}
+                        </span>
                       </div>
+                    </div>
+
+                    {/* Stats row */}
+                    <div className="grid grid-cols-3 gap-2 mb-3 py-3 border-t border-b border-slate-700/40">
                       <div className="text-center">
-                        <p className="text-white font-bold text-sm">{club.eventCount ?? 0}</p>
+                        <p className="text-white font-bold text-lg">{club.memberCount ?? club.membersCount ?? 0}</p>
+                        <p className="text-slate-500 text-xs">Members</p>
+                      </div>
+                      <div className="text-center border-x border-slate-700/40">
+                        <p className="text-white font-bold text-lg">{club.eventCount ?? 0}</p>
                         <p className="text-slate-500 text-xs">Events</p>
                       </div>
+                      <div className="text-center w-full overflow-hidden px-1">
+                        {(club.allCoordinators && club.allCoordinators.length > 0) ? (
+                          <div className="space-y-0.5">
+                            {club.allCoordinators.slice(0, 2).map((coord, idx) => (
+                              <div key={coord.id || idx} className="flex items-center gap-1 justify-center">
+                                {coord.isPrimary && <span className="text-amber-400 text-[9px]">👑</span>}
+                                <p className="text-white font-bold text-[10px] truncate max-w-[80px]" title={coord.name}>
+                                  {coord.name}
+                                </p>
+                              </div>
+                            ))}
+                            {club.allCoordinators.length > 2 && (
+                              <p className="text-slate-500 text-[9px]">+{club.allCoordinators.length - 2} more</p>
+                            )}
+                          </div>
+                        ) : (
+                          <>
+                            <p className="text-white font-bold text-[11px] truncate w-full pt-1" title={club.coordinatorName}>
+                              {club.coordinatorName ? club.coordinatorName : '—'}
+                            </p>
+                            <p className="text-slate-500 text-[9px] truncate w-full" title={club.coordinatorEmail}>
+                              {club.coordinatorEmail ? club.coordinatorEmail : 'Coordinator'}
+                            </p>
+                          </>
+                        )}
+                        <p className="text-slate-500 text-[9px] mt-0.5">Coordinator{(club.allCoordinators?.length ?? 0) > 1 ? 's' : ''}</p>
+                      </div>
+
                     </div>
-                    <div className="flex gap-2 mt-3">
-                      <button onClick={() => handleEditClub(club)} className="flex-1 py-2 rounded-xl bg-slate-700/50 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-600/50">✏️ Edit</button>
-                      <button onClick={() => handleViewClubEvents(club)} className="flex-1 py-2 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 text-xs font-medium border border-indigo-500/10">📅 Events</button>
-                      <button onClick={() => handleDeleteClub(club.id)} className="py-2 px-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs border border-red-500/30">🗑️</button>
+
+                    {/* Action buttons — all inside card (Section 1E) */}
+                    <div className="flex gap-1.5">
+                      <button onClick={() => handleEditClub(club)}
+                        className="flex-1 py-2 rounded-xl bg-slate-700/60 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium transition-all border border-slate-600/40 hover:border-slate-500">
+                        ✏️ Edit
+                      </button>
+                      <button onClick={() => handleViewClubEvents(club)}
+                        className="flex-1 py-2 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 text-xs font-medium transition-all border border-indigo-500/30">
+                        📅 Events
+                      </button>
+                      <button onClick={() => handleDeleteClub(club.id)}
+                        className="py-2 px-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs transition-all border border-red-500/30">
+                        🗑️
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -705,7 +787,7 @@ export default function CollegeAdminDashboard() {
                 return e.status === eventFilter;
               })
               .map(event => (
-              <div key={event.id} className="flex items-center gap-4 bg-slate-800/50 rounded-2xl border border-slate-700/50 p-4 hover:border-slate-600 transition-all group">
+              <div key={event.id} className="flex items-center gap-4 bg-slate-800/50 rounded-2xl border border-slate-700/50 p-4 hover:border-slate-600 transition-all group overflow-hidden">
                 <div className="w-14 h-14 rounded-xl overflow-hidden bg-indigo-900/50 flex-shrink-0">
                   {event.coverUrl ? <img src={`${BACKEND_URL}${event.coverUrl}`} className="w-full h-full object-cover" alt="" /> : <div className="w-full h-full flex items-center justify-center text-xl">📅</div>}
                 </div>
@@ -746,18 +828,23 @@ export default function CollegeAdminDashboard() {
                     })()}
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <button 
+                {/* Section 1D/1E: buttons inside card, guard on COMPLETED */}
+                <div className="flex gap-2 flex-shrink-0 flex-wrap">
+                  <button
                     onClick={() => handleViewRegistrations(event)}
                     className="px-3 py-2 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 text-xs font-semibold"
                   >
                     Registrations
                   </button>
-                  {event.status !== 'COMPLETED' && event.status !== 'CANCELLED' && (
+                  {event.status !== 'COMPLETED' && event.status !== 'CANCELLED' ? (
                     <>
                       <button onClick={() => handleEditEvent(event)} className="p-2 rounded-xl bg-slate-700/50 hover:bg-slate-700 text-slate-400 text-sm">✏️</button>
                       <button onClick={() => handleDeleteEvent(event.id)} className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm">🗑️</button>
                     </>
+                  ) : (
+                    <span className="text-xs text-slate-500 px-3 py-2 rounded-xl bg-slate-800/50">
+                      {event.status === 'COMPLETED' ? '✓ Completed' : 'Cancelled'}
+                    </span>
                   )}
                 </div>
               </div>
@@ -826,6 +913,162 @@ export default function CollegeAdminDashboard() {
 
       {activeTab === "students" && renderStudentsTab()}
 
+      {activeTab === "registrations" && (
+        <div className="space-y-5">
+          {/* Header */}
+          <div className="flex flex-col md:flex-row md:items-center gap-4 justify-between">
+            <div>
+              <h2 className="text-white font-bold text-xl">All Registrations</h2>
+              <p className="text-slate-500 text-xs mt-0.5">View and filter all event registrations across your college</p>
+            </div>
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Club Filter */}
+              <select
+                value={regClubFilter}
+                onChange={e => { setRegClubFilter(e.target.value); setRegEventFilter('ALL'); }}
+                className="bg-slate-800 text-slate-300 rounded-xl px-3 py-2 border border-slate-700 text-xs focus:outline-none focus:border-indigo-500"
+              >
+                <option value="ALL">All Clubs</option>
+                {clubs.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
+              </select>
+              {/* Event Filter */}
+              <select
+                value={regEventFilter}
+                onChange={e => setRegEventFilter(e.target.value)}
+                className="bg-slate-800 text-slate-300 rounded-xl px-3 py-2 border border-slate-700 text-xs focus:outline-none focus:border-indigo-500"
+              >
+                <option value="ALL">All Events</option>
+                {events
+                  .filter(ev => ev.status === 'UPCOMING' || ev.status === 'ONGOING')
+                  .filter(ev => regClubFilter === 'ALL' || String(ev.clubId) === regClubFilter)
+                  .map(ev => <option key={ev.id} value={String(ev.id)}>{ev.title}</option>)
+                }
+              </select>
+              <button
+                onClick={fetchRegistrations}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all"
+              >
+                🔄 Refresh
+              </button>
+            </div>
+          </div>
+
+          {/* Sub-tabs */}
+          <div className="flex gap-1 p-1 bg-slate-800/50 rounded-2xl border border-slate-700/50 w-fit">
+            {[
+              { id: 'individual', label: 'Individual', icon: '👤' },
+              { id: 'team',       label: 'Teams',      icon: '👥' },
+            ].map(t => (
+              <button
+                key={t.id}
+                onClick={() => setRegSubTab(t.id)}
+                className={`flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold transition-all ${
+                  regSubTab === t.id ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <span>{t.icon}</span><span>{t.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {regLoading ? (
+            <div className="py-16 text-center text-slate-500">Loading registrations...</div>
+          ) : regSubTab === 'individual' ? (
+            <div className="bg-slate-800/30 rounded-[2rem] border border-slate-700/50 overflow-hidden">
+              <div className="grid grid-cols-5 gap-4 px-6 py-3 bg-slate-800/80 border-b border-slate-700 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                <span>Student</span><span>Event</span><span>Club</span><span>Status</span><span>Date</span>
+              </div>
+              <div className="divide-y divide-slate-700/30">
+                {allRegistrations.individuals
+                  .filter(r => {
+                    if (r.teamName) return false; // exclude team members
+                    
+                    // Display only UPCOMING/ONGOING event registrations
+                    const evt = events.find(e => String(e.id) === String(r.eventId));
+                    if (!evt || (evt.status !== 'UPCOMING' && evt.status !== 'ONGOING')) return false;
+
+                    if (regClubFilter !== 'ALL' && String(r.clubId) !== regClubFilter) return false;
+                    if (regEventFilter !== 'ALL' && String(r.eventId) !== regEventFilter) return false;
+                    return true;
+                  })
+                  .map((r, i) => (
+                    <div key={r.id || i} className="grid grid-cols-5 gap-4 px-6 py-4 hover:bg-slate-700/20 transition-colors items-center">
+                      <div>
+                        <p className="text-white text-sm font-semibold">{r.name || r.studentName}</p>
+                        <p className="text-slate-500 text-[10px] font-mono">{r.email || r.studentEmail}</p>
+                      </div>
+                      <p className="text-slate-300 text-xs truncate">{r.eventTitle || r.event}</p>
+                      <p className="text-slate-400 text-xs truncate">{r.clubName || '—'}</p>
+                      <div>
+                        {(() => {
+                          const s = (r.status || r.paymentStatus || 'PENDING').toUpperCase();
+                          const cls = s === 'VERIFIED' || s === 'PAID' || s === 'FREE' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                            : s === 'PENDING' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                            : 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+                          return <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${cls}`}>{s}</span>;
+                        })()}
+                        {r.paymentScreenshotUrl && (
+                          <button
+                            onClick={() => window.open(`${BACKEND_URL}${r.paymentScreenshotUrl}`, '_blank')}
+                            className="ml-2 text-indigo-400 text-[10px] underline hover:text-indigo-300"
+                          >Proof</button>
+                        )}
+                      </div>
+                      <p className="text-slate-500 text-[10px]">{r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '—'}</p>
+                    </div>
+                  ))
+                }
+                {allRegistrations.individuals.filter(r => !r.teamName && (regClubFilter === 'ALL' || String(r.clubId) === regClubFilter) && (regEventFilter === 'ALL' || String(r.eventId) === regEventFilter)).length === 0 && (
+                  <div className="py-16 text-center text-slate-500 text-sm">No individual registrations found</div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-slate-800/30 rounded-[2rem] border border-slate-700/50 overflow-hidden">
+              <div className="grid grid-cols-5 gap-4 px-6 py-3 bg-slate-800/80 border-b border-slate-700 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                <span>Team</span><span>Event</span><span>Club</span><span>Status</span><span>Members</span>
+              </div>
+              <div className="divide-y divide-slate-700/30">
+                {allRegistrations.teams
+                  .filter(t => {
+                    // Display only UPCOMING/ONGOING event registrations
+                    const evt = events.find(e => String(e.id) === String(t.eventId));
+                    if (!evt || (evt.status !== 'UPCOMING' && evt.status !== 'ONGOING')) return false;
+
+                    if (regClubFilter !== 'ALL' && String(t.clubId) !== regClubFilter) return false;
+                    if (regEventFilter !== 'ALL' && String(t.eventId) !== regEventFilter) return false;
+                    return true;
+                  })
+                  .map((t, i) => (
+                    <div key={t.id || i} className="grid grid-cols-5 gap-4 px-6 py-4 hover:bg-slate-700/20 transition-colors items-center">
+                      <div>
+                        <p className="text-white text-sm font-semibold">{t.teamName}</p>
+                        <p className="text-slate-500 text-[10px]">Leader: {t.leaderName || t.leader}</p>
+                      </div>
+                      <p className="text-slate-300 text-xs truncate">{t.eventTitle || t.event}</p>
+                      <p className="text-slate-400 text-xs truncate">{t.clubName || '—'}</p>
+                      <div>
+                        {(() => {
+                          const s = (t.status || 'PENDING').toUpperCase();
+                          const cls = s === 'VERIFIED' || s === 'PAID' || s === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                            : s === 'PENDING' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                            : 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+                          return <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${cls}`}>{s}</span>;
+                        })()}
+                      </div>
+                      <p className="text-slate-400 text-xs">{t.memberCount ?? (t.members?.length ?? '—')} members</p>
+                    </div>
+                  ))
+                }
+                {allRegistrations.teams.filter(t => (regClubFilter === 'ALL' || String(t.clubId) === regClubFilter) && (regEventFilter === 'ALL' || String(t.eventId) === regEventFilter)).length === 0 && (
+                  <div className="py-16 text-center text-slate-500 text-sm">No team registrations found</div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {activeTab === "gallery" && (
         <div className="space-y-6">
           <div className="flex justify-between items-center">
@@ -852,14 +1095,14 @@ export default function CollegeAdminDashboard() {
       {showCreateClub && (
         <CreateClubModal
           isOpen={showCreateClub}
-          onClose={() => setShowCreateClub(false)}
+          onClose={() => { setShowCreateClub(false); fetchData(); fetchStats(); }}
           onSuccess={() => { setShowCreateClub(false); fetchData(); fetchStats(); }}
         />
       )}
       {showCreateEvent && (
         <CreateEventModal
           isOpen={showCreateEvent}
-          onClose={() => setShowCreateEvent(false)}
+          onClose={() => { setShowCreateEvent(false); fetchData(); fetchStats(); }}
           onSuccess={() => { setShowCreateEvent(false); fetchData(); fetchStats(); }}
         />
       )}
@@ -867,14 +1110,14 @@ export default function CollegeAdminDashboard() {
         <EditClubModal
           isOpen={showEditClubModal}
           club={selectedClub}
-          onClose={() => { setShowEditClubModal(false); setSelectedClub(null); }}
+          onClose={() => { setShowEditClubModal(false); setSelectedClub(null); fetchData(); fetchStats(); }}
           onSuccess={() => { setShowEditClubModal(false); fetchData(); fetchStats(); }}
         />
       )}
       {showEditEvent && selectedEvent && (
         <EditEventModal
           event={selectedEvent}
-          onClose={() => { setShowEditEvent(false); setSelectedEvent(null); }}
+          onClose={() => { setShowEditEvent(false); setSelectedEvent(null); fetchData(); fetchStats(); }}
           onSuccess={() => { setShowEditEvent(false); fetchData(); fetchStats(); }}
         />
       )}
@@ -883,7 +1126,7 @@ export default function CollegeAdminDashboard() {
       {showRegsModal && selectedEvent && (
         <EventRegistrationsModal 
           isOpen={showRegsModal}
-          onClose={() => { setShowRegsModal(false); setSelectedEvent(null); }}
+          onClose={() => { setShowRegsModal(false); setSelectedEvent(null); fetchData(); fetchStats(); }}
           event={selectedEvent}
           role="college"
         />

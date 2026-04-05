@@ -55,23 +55,33 @@ const CollegeCard = ({ college }) => {
                     <span className="text-xs">📍</span> {college.location || 'Location TBA'}
                 </p>
 
-                {college.affiliation && (
-                    <div className="mb-4">
-                        <span className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest italic flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-                            Affiliated: {college.affiliation}
-                        </span>
+                {/* Affiliations Badge */}
+                {((college.affiliations && college.affiliations.length > 0) || college.affiliation) && (
+                    <div className="mb-4 flex flex-wrap justify-center gap-2">
+                        {college.affiliations && college.affiliations.length > 0 ? (
+                            college.affiliations.slice(0, 2).map((a, i) => (
+                                <span key={i} className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest italic flex items-center gap-1.5">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                                    {a}
+                                </span>
+                            ))
+                        ) : (
+                            <span className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest italic flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                                {college.affiliation}
+                            </span>
+                        )}
                     </div>
                 )}
 
                 {college.description && (
-                    <p className="text-slate-400/80 text-sm line-clamp-2 leading-relaxed mb-8">
+                    <p className="text-slate-400/80 text-sm line-clamp-2 leading-relaxed mb-6 px-2">
                         {college.description}
                     </p>
                 )}
 
                 {/* Stats Grid - 3 Premium Glass Blocks */}
-                <div className="grid grid-cols-3 gap-3 w-full mb-8">
+                <div className="grid grid-cols-3 gap-2 sm:gap-3 w-full mb-6">
                     <div className="bg-[#1e293b]/50 border border-white/5 rounded-2xl py-4 group-hover:bg-indigo-500/10 hover:border-indigo-500/30 transition-all duration-300">
                         <p className="text-white font-display font-black text-2xl mb-1">{college.clubCount ?? 0}+</p>
                         <div className="flex flex-col items-center gap-1.5 grayscale group-hover:grayscale-0 transition-all">
@@ -81,7 +91,7 @@ const CollegeCard = ({ college }) => {
                     </div>
                     
                     <div className="bg-[#1e293b]/50 border border-white/5 rounded-2xl py-4 group-hover:bg-indigo-500/10 hover:border-indigo-500/30 transition-all duration-300">
-                        <p className="text-white font-display font-black text-2xl mb-1">{college.eventCount ?? 0}+</p>
+                        <p className="text-white font-display font-black text-2xl mb-1">{college.eventCount ?? college.upcomingEventCount ?? 0}+</p>
                         <div className="flex flex-col items-center gap-1.5 grayscale group-hover:grayscale-0 transition-all">
                             <span className="text-xs">📅</span>
                             <span className="text-[8px] font-black text-slate-500 tracking-[0.2em] uppercase">Events</span>
@@ -97,21 +107,39 @@ const CollegeCard = ({ college }) => {
                     </div>
                 </div>
 
-                {/* Website Link */}
-                {college.website && String(college.website).trim() && (
-                    <div className="w-full">
-                        <div
-                            onClick={e => {
-                                e.stopPropagation();
-                                window.open(college.website, '_blank');
-                            }}
-                            className="w-full inline-flex items-center justify-center gap-2 text-sm font-black text-indigo-300 bg-indigo-500/5 hover:bg-indigo-500/10 border border-indigo-500/10 py-3 rounded-2xl transition-all group/link cursor-pointer hover:shadow-lg hover:shadow-indigo-500/5"
-                        >
-                            <span className="text-xs group-hover/link:rotate-45 transition-transform duration-300">🔗</span>
-                            {String(college.website).replace(/^https?:\/\//, '').split('/')[0]}
-                        </div>
-                    </div>
-                )}
+                {/* Extended Social & Contact Icons */}
+                <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
+                    {college.website && (
+                        <a href={college.website} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="w-8 h-8 rounded-full bg-slate-800/50 hover:bg-slate-700/80 flex items-center justify-center text-slate-300 hover:text-white transition-all border border-slate-700/50 hover:border-white/20">
+                            🌐
+                        </a>
+                    )}
+                    {college.instagram && (
+                        <a href={college.instagram.startsWith('http') ? college.instagram : `https://instagram.com/${college.instagram.replace('@','')}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="w-8 h-8 rounded-full bg-slate-800/50 hover:bg-pink-500/20 flex items-center justify-center text-slate-300 hover:text-pink-400 transition-all border border-slate-700/50 hover:border-pink-500/50">
+                            📸
+                        </a>
+                    )}
+                    {college.linkedin && (
+                        <a href={college.linkedin} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="w-8 h-8 rounded-full bg-slate-800/50 hover:bg-blue-500/20 flex items-center justify-center text-slate-300 hover:text-blue-400 transition-all border border-slate-700/50 hover:border-blue-500/50">
+                            💼
+                        </a>
+                    )}
+                    {college.twitter && (
+                        <a href={college.twitter} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="w-8 h-8 rounded-full bg-slate-800/50 hover:bg-sky-500/20 flex items-center justify-center text-slate-300 hover:text-sky-400 transition-all border border-slate-700/50 hover:border-sky-500/50">
+                            🐦
+                        </a>
+                    )}
+                    {college.facebook && (
+                        <a href={college.facebook} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="w-8 h-8 rounded-full bg-slate-800/50 hover:bg-indigo-500/20 flex items-center justify-center text-slate-300 hover:text-indigo-400 transition-all border border-slate-700/50 hover:border-indigo-500/50">
+                            📘
+                        </a>
+                    )}
+                    {college.contactEmail && (
+                        <a href={`mailto:${college.contactEmail}`} onClick={e => e.stopPropagation()} className="w-8 h-8 rounded-full bg-slate-800/50 hover:bg-emerald-500/20 flex items-center justify-center text-slate-300 hover:text-emerald-400 transition-all border border-slate-700/50 hover:border-emerald-500/50">
+                            ✉️
+                        </a>
+                    )}
+                </div>
             </div>
         </div>
     );

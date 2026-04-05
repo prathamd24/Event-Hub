@@ -5,74 +5,78 @@ import { toast } from '../components/Toast';
 import { signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
 import api from '../services/api';
+import Footer from '../components/Footer';
 
 export default function LoginPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const { setUser } = useAuth();
+    const { setUser, user } = useAuth();
     const navigate = useNavigate();
+
+    useEffect(() => {
+        if (user) navigate('/');
+        // Show any error stored from a previous attempt
+        const stored = sessionStorage.getItem('pending_login_error');
+        if (stored) { setError(stored); sessionStorage.removeItem('pending_login_error'); }
+    }, [user]);
 
     const handleGoogleSignIn = async () => {
         setLoading(true);
         setError('');
         try {
+            // signInWithPopup gives us the result immediately — no redirect needed
             const result = await signInWithPopup(auth, googleProvider);
             const idToken = await result.user.getIdToken();
+
             const res = await api.post('/api/auth/google-login', { idToken });
             const dbUser = res.data.user;
             setUser(dbUser);
 
             if (res.data.isNewUser) {
-                toast(`Welcome ${dbUser.name}! Please complete your profile.`, 'success');
+                toast(`Welcome! Please complete your profile.`, 'success');
                 navigate('/student/profile');
             } else {
                 toast(`Welcome back, ${dbUser.name}!`, 'success');
                 navigate('/');
             }
         } catch (err) {
-            console.error('Google Sign-In error:', err);
-            handleAuthError(err);
+            console.error('[LoginPage] Sign-in error:', err);
+            // User closed the popup
+            if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+                setLoading(false);
+                return;
+            }
+            // User not registered in our DB
+            if (err.response?.status === 404) {
+                const message = err.response.data.error || 'Please register yourself first.';
+                setError(message);
+                toast(message, 'error');
+                // Sign out of Firebase so the auth state is clean
+                try { await auth.signOut(); } catch (_) {}
+                setUser(null);
+                setLoading(false);
+                return;
+            }
+            // College blocked
+            if (err.response?.data?.blocked) {
+                navigate('/college-blocked', { state: { reason: err.response.data.reason, message: err.response.data.message } });
+                return;
+            }
+            const message = err.response?.data?.message || err.response?.data?.error || err.message || 'Sign-in failed';
+            setError(message);
+            toast(message, 'error');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleAuthError = async (err) => {
-        if (err.response?.data?.blocked) {
-            navigate('/college-blocked', { state: { reason: err.response.data.reason, message: err.response.data.message } });
-            return;
-        }
-
-        let message = 'Sign-in failed';
-
-        if (err.response?.status === 404) {
-            message = err.response.data.error || 'Account not found. Please register first.';
-            toast(message, 'error');
-            if (auth.currentUser) await auth.signOut();
-            return;
-        }
-
-        if (err.code === 'auth/popup-closed-by-user') message = 'Sign-in was cancelled';
-        else if (err.response?.data?.message || err.response?.data?.error)
-            message = err.response.data.message || err.response.data.error;
-        else if (err.message) message = err.message;
-
-        setError(message);
-        toast(message, 'error');
-
-        if (auth.currentUser && err.response) {
-            await auth.signOut();
-            setUser(null);
-        }
-    };
-
     return (
-        <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-4 sm:p-6 lg:p-8 animate-fadeIn relative overflow-hidden">
-            {/* Ambient Background Glows */}
+        <div className="min-h-screen bg-[#0f172a] flex flex-col animate-fadeIn relative overflow-x-hidden">
             <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-500/20 rounded-full blur-[120px] pointer-events-none" />
             <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-purple-500/20 rounded-full blur-[120px] pointer-events-none" />
 
-            <div className="w-full max-w-6xl bg-white/5 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col md:flex-row relative z-10">
+            <div className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8 w-full">
+                <div className="w-full max-w-6xl bg-white/5 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col md:flex-row relative z-10 mt-16 md:mt-0">
                 
                 {/* Left Side - Hero */}
                 <div className="w-full md:w-1/2 relative min-h-[300px] md:min-h-full hidden md:block">
@@ -97,15 +101,10 @@ export default function LoginPage() {
                     <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-[80px] pointer-events-none" />
                     
                     <div className="w-full max-w-md mx-auto relative z-10">
-                        
                         {/* Tabs */}
                         <div className="flex bg-[#1e293b]/50 p-1.5 rounded-2xl border border-white/5 mb-10 w-full backdrop-blur-md">
-                            <button className="flex-1 py-3 text-sm font-bold rounded-xl bg-white/10 text-white shadow-lg shadow-black/20 border border-white/10 transition-all">
-                                Login
-                            </button>
-                            <Link to="/register" className="flex-1 py-3 text-sm font-bold rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all text-center">
-                                Register
-                            </Link>
+                            <button className="flex-1 py-3 text-sm font-bold rounded-xl bg-white/10 text-white shadow-lg shadow-black/20 border border-white/10 transition-all">Login</button>
+                            <Link to="/register" className="flex-1 py-3 text-sm font-bold rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all text-center">Register</Link>
                         </div>
 
                         <div className="mb-10">
@@ -113,19 +112,25 @@ export default function LoginPage() {
                             <p className="text-slate-400 font-medium">Sign in with your Google account to continue.</p>
                         </div>
 
+                        {/* Error Box */}
                         {error && (
-                            <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-sm text-red-400 flex items-center gap-3">
-                                <span className="text-lg">⚠️</span> {error}
+                            <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-4 text-sm text-red-400 flex flex-col gap-3">
+                                <div className="flex items-center gap-3">
+                                    <span className="text-xl">⚠️</span>
+                                    <span className="font-semibold">{error}</span>
+                                </div>
+                                {(error.toLowerCase().includes('register') || error.toLowerCase().includes('first')) && (
+                                    <button onClick={() => navigate('/register')}
+                                        className="mt-1 w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-lg transition-all text-sm shadow">
+                                        Register Now — It's Free →
+                                    </button>
+                                )}
                             </div>
                         )}
 
                         {/* Google Sign-In Button */}
-                        <button
-                            onClick={handleGoogleSignIn}
-                            disabled={loading}
-                            type="button"
-                            className="w-full flex justify-center items-center gap-3 py-4 px-6 rounded-xl bg-white text-slate-800 font-bold text-sm transition-all hover:bg-slate-100 disabled:opacity-50 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
-                        >
+                        <button onClick={handleGoogleSignIn} disabled={loading} type="button"
+                            className="w-full flex justify-center items-center gap-3 py-4 px-6 rounded-xl bg-white text-slate-800 font-bold text-sm transition-all hover:bg-slate-100 disabled:opacity-50 shadow-lg hover:shadow-xl hover:-translate-y-0.5">
                             {loading ? (
                                 <span className="flex items-center gap-2">
                                     <div className="w-5 h-5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin" />
@@ -146,18 +151,17 @@ export default function LoginPage() {
 
                         <p className="text-center text-slate-500 text-xs mt-8">
                             College Admin or Club Coordinator?{' '}
-                            <Link to="/login/admin" className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">
-                                Sign in with email →
-                            </Link>
+                            <Link to="/login/admin" className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">Sign in with email →</Link>
                         </p>
                     </div>
                 </div>
             </div>
+            </div>
             
-            {/* Back to Home */}
-            <Link to="/" className="absolute top-6 left-6 md:top-8 md:left-8 w-12 h-12 rounded-full bg-white/5 border border-white/10 backdrop-blur-md flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-all z-20">
-                ←
-            </Link>
+            <Link to="/" className="absolute top-6 left-6 md:top-8 md:left-8 w-12 h-12 rounded-full bg-white/5 border border-white/10 backdrop-blur-md flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-all z-20">←</Link>
+            
+            {/* Premium Footer */}
+            <Footer />
         </div>
     );
 }

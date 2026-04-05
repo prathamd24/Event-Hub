@@ -11,10 +11,18 @@ export default function CreateCollegeModal({ isOpen, onClose, onSuccess }) {
         affiliation: '',
         description: '',
         website: '',
-        website: '',
         adminName: '',
         adminEmail: '',
-        adminPassword: ''
+        adminPassword: '',
+        establishedYear: '',
+        type: '',
+        naacGrade: '',
+        contactEmail: '',
+        phone: '',
+        instagram: '',
+        twitter: '',
+        linkedin: '',
+        facebook: ''
     });
 
     if (!isOpen) return null;
@@ -43,8 +51,8 @@ export default function CreateCollegeModal({ isOpen, onClose, onSuccess }) {
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
-            <div className="bg-white/10 backdrop-blur-3xl border border-white/20 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden my-8 animate-fadeIn relative">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4 overflow-hidden">
+            <div className="bg-[#0f172a] sm:bg-white/10 backdrop-blur-3xl border border-white/20 rounded-t-[2.5rem] sm:rounded-3xl w-full sm:max-w-2xl shadow-2xl overflow-y-auto animate-slideUp sm:animate-fadeIn relative max-h-[90vh] h-auto my-0 sm:my-8 pb-8 sm:pb-0">
                 {/* Decorative glow */}
                 <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/20 rounded-full blur-[80px] pointer-events-none" />
 
@@ -82,6 +90,57 @@ export default function CreateCollegeModal({ isOpen, onClose, onSuccess }) {
                                 <div className="md:col-span-2">
                                     <label className="block text-sm font-bold text-slate-300 mb-2">Description</label>
                                     <textarea name="description" rows="3" value={formData.description} onChange={handleChange} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-emerald-500/50 focus:bg-white/5 outline-none transition-all font-medium resize-none" placeholder="Short description about the college..."></textarea>
+                                </div>
+                            </div>
+
+                            <h3 className="text-sm font-black text-amber-400 uppercase tracking-widest mt-8 mb-5 border-b border-white/10 pb-3 flex items-center gap-2">
+                                <span className="p-1.5 bg-amber-500/20 rounded-lg">📋</span> Additional Details
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-300 mb-2">Established Year</label>
+                                    <input type="number" name="establishedYear" value={formData.establishedYear} onChange={handleChange} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-amber-500/50 focus:bg-white/5 outline-none transition-all font-medium" placeholder="e.g. 1995" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-300 mb-2">Institution Type</label>
+                                    <select name="type" value={formData.type} onChange={handleChange} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-amber-500/50 focus:bg-white/5 outline-none transition-all font-medium appearance-none">
+                                        <option value="" className="text-black">Select Type</option>
+                                        <option value="Engineering" className="text-black">Engineering</option>
+                                        <option value="Arts & Science" className="text-black">Arts & Science</option>
+                                        <option value="Medical" className="text-black">Medical</option>
+                                        <option value="Commerce" className="text-black">Commerce</option>
+                                        <option value="University" className="text-black">University</option>
+                                        <option value="Polytechnic" className="text-black">Polytechnic</option>
+                                        <option value="Other" className="text-black">Other</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-300 mb-2">NAAC Grade / Recognition</label>
+                                    <input type="text" name="naacGrade" value={formData.naacGrade} onChange={handleChange} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-amber-500/50 focus:bg-white/5 outline-none transition-all font-medium" placeholder="e.g. A++" />
+                                </div>
+                            </div>
+
+                            <h3 className="text-sm font-black text-rose-400 uppercase tracking-widest mt-8 mb-5 border-b border-white/10 pb-3 flex items-center gap-2">
+                                <span className="p-1.5 bg-rose-500/20 rounded-lg">📞</span> Contact & Socials
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-300 mb-2">Public Contact Email</label>
+                                    <input type="email" name="contactEmail" value={formData.contactEmail} onChange={handleChange} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-rose-500/50 focus:bg-white/5 outline-none transition-all font-medium" placeholder="contact@college.edu" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-300 mb-2">Phone</label>
+                                    <input type="text" name="phone" value={formData.phone} onChange={handleChange} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-rose-500/50 focus:bg-white/5 outline-none transition-all font-medium" placeholder="+91..." />
+                                </div>
+                                <div className="md:col-span-2 grid grid-cols-2 gap-5">
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-300 mb-2">Instagram (Optional)</label>
+                                        <input type="url" name="instagram" value={formData.instagram} onChange={handleChange} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-rose-500/50 focus:bg-white/5 outline-none transition-all font-medium text-sm" placeholder="https://instagram.com/..." />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-300 mb-2">LinkedIn (Optional)</label>
+                                        <input type="url" name="linkedin" value={formData.linkedin} onChange={handleChange} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-rose-500/50 focus:bg-white/5 outline-none transition-all font-medium text-sm" placeholder="https://linkedin.com/..." />
+                                    </div>
                                 </div>
                             </div>
                         </div>

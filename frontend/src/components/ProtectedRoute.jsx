@@ -14,7 +14,11 @@ const ProtectedRoute = ({ children, allowedRoles, requireSC = false }) => {
     }
 
     // Force college selection for Students
-    const isMissingCollege = user.role === 'STUDENT' && !user.collegeId && user.collegeName === 'Not specified';
+    const isMissingCollege = user.role === 'STUDENT' && (!user.collegeId || user.collegeId === -1) && (
+        !user.collegeName || 
+        user.collegeName === 'Not specified' || 
+        user.collegeName.trim() === ''
+    );
     
     // Redirect to profile if missing college, but allow them to stay on the profile page itself
     if (isMissingCollege && window.location.pathname !== '/student/profile') {

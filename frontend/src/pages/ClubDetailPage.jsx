@@ -4,12 +4,16 @@ import api from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EventCard from '../components/EventCard';
 import { BACKEND_URL } from '../config';
+import Footer from '../components/Footer';
 
 const BASE = BACKEND_URL;
 
 export default function ClubDetailPage() {
     const { id } = useParams();
     const [club, setClub] = useState(null);
+    const [coordinators, setCoordinators] = useState([]);
+    const [pastEvents, setPastEvents] = useState([]);
+    const [showAllPast, setShowAllPast] = useState(false);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -17,6 +21,14 @@ export default function ClubDetailPage() {
             try {
                 const res = await api.get(`/api/public/clubs/${id}`);
                 setClub(res.data);
+                setPastEvents(res.data.past_events || []);
+                
+                try {
+                    const coordsRes = await api.get(`/api/public/clubs/${id}/coordinators`);
+                    setCoordinators(coordsRes.data || []);
+                } catch (e) {
+                    console.error("Coordinators fetch failed", e);
+                }
             } catch (error) {
                 console.error("Failed to load club", error);
             } finally {
@@ -145,6 +157,34 @@ export default function ClubDetailPage() {
                             </div>
                         </div>
 
+                        {/* Past Events Section */}
+                        {pastEvents.length > 0 && (
+                            <div className="mb-12 animate-fadeIn pt-10 border-t border-white/5">
+                                <h3 className="text-xl font-display font-bold text-slate-400 mb-6 flex items-center gap-3">
+                                    <span className="w-8 h-8 rounded-lg bg-slate-500/20 flex items-center justify-center text-sm border border-slate-500/30 grayscale">⏮️</span>
+                                    Past Events
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {(showAllPast ? pastEvents : pastEvents.slice(0, 2)).map(event => (
+                                        <div key={event.id} className="opacity-80 hover:opacity-100 transition-opacity grayscale hover:grayscale-0">
+                                            <EventCard event={event} showAll={true} />
+                                        </div>
+                                    ))}
+                                </div>
+                                
+                                {pastEvents.length > 2 && (
+                                    <div className="mt-8 flex justify-center">
+                                        <button 
+                                            onClick={() => setShowAllPast(!showAllPast)}
+                                            className="px-6 py-2.5 rounded-full bg-slate-800/50 hover:bg-slate-700/80 text-slate-300 font-bold text-sm border border-slate-600/50 transition-all hover:-translate-y-1"
+                                        >
+                                            {showAllPast ? 'Show Less' : `View All Past Events (${pastEvents.length})`}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         {/* Aesthetic Photo Gallery */}
                         {(() => {
                             const allPhotos = [
@@ -197,41 +237,50 @@ export default function ClubDetailPage() {
                     {/* Right: Sticky Sidebar */}
                     <div className="lg:w-80 shrink-0">
                         <div className="sticky top-24 space-y-6">
-                            {/* Coordinator Card */}
-                            <div className="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 shadow-xl">
-                                <h3 className="text-lg font-display font-bold text-white mb-6 flex items-center gap-3">
-                                    <span className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-sm border border-purple-500/30">👤</span>
-                                    Club Coordinator
-                                </h3>
-                                <div className="space-y-5">
-                                    <div>
-                                        <p className="text-slate-500 text-xs mb-1 uppercase tracking-widest font-black">Name</p>
-                                        <p className="text-white font-bold text-lg">{club.coordinatorName}</p>
+                            {/* Staff Coordinators List */}
+                            {coordinators.filter(c => c.role === 'CLUB_COORDINATOR').length > 0 && (
+                                <div className="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 shadow-xl">
+                                    <h3 className="text-lg font-display font-bold text-white mb-6 flex items-center gap-3">
+                                        <span className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-sm border border-purple-500/30">👤</span>
+                                        Staff Coordinators
+                                    </h3>
+                                    <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                                        {coordinators.filter(c => c.role === 'CLUB_COORDINATOR').map((coord, idx) => (
+                                            <div key={idx} className="pb-4 border-b border-white/10 last:border-0 last:pb-0 relative">
+                                                {coord.isPrimary && <span className="absolute top-0 right-0 text-xs">👑</span>}
+                                                <p className="text-white font-bold">{coord.name}</p>
+                                                <p className="text-purple-400 text-sm truncate" title={coord.email}>{coord.email}</p>
+                                            </div>
+                                        ))}
                                     </div>
-                                    <div>
-                                        <p className="text-slate-500 text-xs mb-1 uppercase tracking-widest font-black">Email</p>
-                                        <p className="text-indigo-400 font-bold break-all">{club.coordinatorEmail}</p>
-                                    </div>
-                                    {club.instagram && (
-                                        <div>
-                                            <p className="text-slate-500 text-xs mb-1 uppercase tracking-widest font-black">Instagram</p>
-                                            <a
-                                                href={`https://instagram.com/${club.instagram.replace('@','')}`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="text-pink-400 font-bold hover:text-pink-300 transition-colors flex items-center gap-1"
-                                            >
-                                                📸 @{club.instagram.replace('@','')}
-                                            </a>
-                                        </div>
-                                    )}
                                 </div>
-                            </div>
+                            )}
+
+                            {/* Student Coordinators List */}
+                            {coordinators.filter(c => c.role !== 'CLUB_COORDINATOR').length > 0 && (
+                                <div className="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 shadow-xl">
+                                    <h3 className="text-lg font-display font-bold text-white mb-6 flex items-center gap-3">
+                                        <span className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center text-sm border border-indigo-500/30">👥</span>
+                                        Student Team
+                                    </h3>
+                                    <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                                        {coordinators.filter(c => c.role !== 'CLUB_COORDINATOR').map((coord, idx) => (
+                                            <div key={idx} className="pb-4 border-b border-white/10 last:border-0 last:pb-0">
+                                                <p className="text-white font-bold">{coord.name}</p>
+                                                <p className="text-indigo-400 text-sm truncate" title={coord.email}>{coord.email}</p>
+                                                <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-widest font-black">{coord.role.replace('_', ' ')}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                         </div>
                     </div>
                 </div>
             </div>
+            {/* Premium Footer */}
+            <Footer />
         </div>
     );
 }

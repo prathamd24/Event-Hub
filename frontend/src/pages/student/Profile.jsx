@@ -149,6 +149,11 @@ export default function StudentProfile() {
                                     <div>
                                         <p className="text-sm font-medium text-slate-400 mb-1">Full Name</p>
                                         <div className="flex items-center gap-2.5 flex-wrap">
+                                            {profile.role === 'STUDENT' && (
+                                                <span className="px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/30 text-[9px] font-black text-blue-400 uppercase tracking-[0.2em] italic shadow-lg shadow-blue-500/5">
+                                                    🎓 Student
+                                                </span>
+                                            )}
                                             {profile.role === 'CLUB_COORDINATOR' && (
                                                 <span className="px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-[9px] font-black text-indigo-400 uppercase tracking-[0.2em] italic shadow-lg shadow-indigo-500/5">
                                                     👑 Club Head
@@ -176,6 +181,17 @@ export default function StudentProfile() {
                                     <div>
                                         <p className="text-sm font-medium text-slate-400 mb-1">College</p>
                                         <p className="text-indigo-400 font-medium">{user?.collegeName || '-'}</p>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-6 pt-4 border-t border-slate-700/50">
+                                    <div className="bg-slate-800/50 p-4 rounded-xl border border-white/5">
+                                        <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Events Registered</p>
+                                        <p className="text-white font-black text-2xl">{profile.eventCount || 0}</p>
+                                    </div>
+                                    <div className="bg-slate-800/50 p-4 rounded-xl border border-white/5">
+                                        <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Teams Joined</p>
+                                        <p className="text-white font-black text-2xl">{profile.teamCount || 0}</p>
                                     </div>
                                 </div>
 

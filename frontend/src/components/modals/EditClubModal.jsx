@@ -19,28 +19,83 @@ export default function EditClubModal({ isOpen, onClose, onSuccess, club }) {
     const [photoDragging, setPhotoDragging] = useState(false);
     const photoInputRef = useRef(null);
 
-    useEffect(() => {
-        if (club) {
-            setFormData({
-                name: club.name || '',
-                description: club.description || '',
-                category: club.category || 'Technical',
-                instagram: club.instagram || ''
-            });
-            setLogoPreview(club.logoUrl ? `${BASE}${club.logoUrl}` : null);
-            setCoverPreview(club.coverUrl ? `${BASE}${club.coverUrl}` : null);
+    // CATEGORY LOGIC
+    const [categories, setCategories] = useState([]);
+    const [showCustomCategory, setShowCustomCategory] = useState(false);
+    const [customCategory, setCustomCategory] = useState('');
 
-            // Pre-populate club photos
-            const existing = (club.clubPhotos || []).map(url => ({
-                file: null, preview: `${BASE}${url}`, existing: true, url
-            }));
-            setClubPhotos(existing);
+    // COORDINATOR LOGIC
+    const [coordinators, setCoordinators] = useState([]);
+    const [newCoordinator, setNewCoordinator] = useState({ name: '', email: '', password: '' });
+    const [showAddCoordinator, setShowAddCoordinator] = useState(false);
+    const [savingCoordinatorId, setSavingCoordinatorId] = useState(null);
+
+    const prevClubId = useRef(null);
+
+    useEffect(() => {
+        if (club && isOpen) {
+            // Only initialize if it's a different club OR if it hasn't been initialized yet for this open session
+            if (prevClubId.current !== club.id) {
+                setFormData({
+                    name: club.name || '',
+                    description: club.description || '',
+                    category: club.category || 'Technical',
+                    instagram: club.instagram || ''
+                });
+                setLogoPreview(club.logoUrl ? `${BASE}${club.logoUrl}` : null);
+                setCoverPreview(club.coverUrl ? `${BASE}${club.coverUrl}` : null);
+
+                // Fetch generic references
+                api.get('/api/college-admin/categories')
+                   .then(res => {
+                       const cats = res.data.categories || [];
+                       setCategories(cats);
+                       if (club.category && !cats.includes(club.category)) {
+                           setFormData(prev => ({ ...prev, category: 'Other' }));
+                           setShowCustomCategory(true);
+                           setCustomCategory(club.category);
+                       } else {
+                           setShowCustomCategory(false);
+                           setCustomCategory('');
+                       }
+                   })
+                   .catch(err => console.error("Failed to load categories", err));
+
+                // Fetch coordinators
+                if (club.id) {
+                    api.get(`/api/college-admin/clubs/${club.id}/coordinators`)
+                       .then(res => setCoordinators(res.data.coordinators || []))
+                       .catch(err => console.error("Failed to load coordinators", err));
+
+                    // Load photos
+                    const existing = (club.photos || []).map(url => ({
+                        file: null, preview: `${BASE}${url}`, existing: true, url
+                    }));
+                    setClubPhotos(existing);
+                }
+                
+                prevClubId.current = club.id;
+            }
+        } else if (!isOpen) {
+            // Reset when closed so it can re-init next time
+            prevClubId.current = null;
         }
-    }, [club]);
+    }, [club, isOpen, BASE]);
 
     if (!isOpen) return null;
 
     const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+
+    const handleCategoryChange = (e) => {
+        const val = e.target.value;
+        if (val === 'Other') {
+            setShowCustomCategory(true);
+            setFormData({ ...formData, category: 'Other' });
+        } else {
+            setShowCustomCategory(false);
+            setFormData({ ...formData, category: val });
+        }
+    };
 
     const addPhotos = (files) => {
         const valid = Array.from(files).filter(f =>
@@ -53,14 +108,13 @@ export default function EditClubModal({ isOpen, onClose, onSuccess, club }) {
         setClubPhotos(prev => [...prev, ...toAdd].slice(0, 5));
     };
 
-    const removePhoto = (index) => {
-        setClubPhotos(prev => prev.filter((_, i) => i !== index));
-    };
+    const removePhoto = (index) => setClubPhotos(prev => prev.filter((_, i) => i !== index));
 
     const handleLogoChange = (e) => {
         const file = e.target.files[0];
         if (file) { setLogo(file); setLogoPreview(URL.createObjectURL(file)); }
     };
+
     const handleCoverChange = (e) => {
         const file = e.target.files[0];
         if (file) { setCover(file); setCoverPreview(URL.createObjectURL(file)); }
@@ -71,25 +125,34 @@ export default function EditClubModal({ isOpen, onClose, onSuccess, club }) {
         setLoading(true);
         try {
             const data = new FormData();
-            Object.keys(formData).forEach(k => { if (formData[k] !== undefined && formData[k] !== null) data.append(k, formData[k]); });
+            Object.keys(formData).forEach(k => { 
+                if (formData[k] !== undefined && formData[k] !== null && k !== 'category') {
+                    data.append(k, formData[k]); 
+                } 
+            });
+
+            const finalCategory = showCustomCategory ? customCategory.trim() : formData.category;
+            data.append('category', finalCategory);
+
             if (logo) data.append('logo', logo);
             if (cover) data.append('cover', cover);
 
-            // Photos to remove (existing that were removed)
             const removed = (club.clubPhotos || []).filter(url =>
                 !clubPhotos.some(p => p.existing && p.url === url)
             );
             if (removed.length) data.append('remove_photos', JSON.stringify(removed));
 
-            // New photos to upload
             let photoIdx = 0;
             clubPhotos.forEach(p => {
-                if (p.file) {
-                    data.append(`photo_${photoIdx++}`, p.file);
-                }
+                if (p.file) data.append(`photo_${photoIdx++}`, p.file);
             });
 
             const res = await api.put(`/api/college-admin/clubs/${club.id}`, data);
+            
+            if (showCustomCategory) {
+                try { await api.post('/api/college-admin/categories', { category: finalCategory }); } catch(e){}
+            }
+
             toast('Club updated successfully', 'success');
             onSuccess(res.data);
             onClose();
@@ -100,132 +163,223 @@ export default function EditClubModal({ isOpen, onClose, onSuccess, club }) {
         }
     };
 
+    // --- COORDINATOR CRUD ---
+    const handleAddCoordinator = async () => {
+        if (!newCoordinator.name || !newCoordinator.email || !newCoordinator.password) {
+            return toast('Fill all fields for the new coordinator', 'error');
+        }
+        try {
+            const res = await api.post(`/api/college-admin/clubs/${club.id}/coordinators`, newCoordinator);
+            setCoordinators([...coordinators, res.data.coordinator]);
+            setNewCoordinator({ name: '', email: '', password: '' });
+            setShowAddCoordinator(false);
+            toast('Coordinator added successfully', 'success');
+        } catch (err) {
+            toast(err.response?.data?.error || 'Failed to add coordinator', 'error');
+        }
+    };
+
+    const handleUpdateCoordinator = async (coordId, index) => {
+        setSavingCoordinatorId(coordId);
+        try {
+            const payload = {
+                name: coordinators[index].name,
+                email: coordinators[index].email,
+                password: coordinators[index].password // optional
+            };
+            const res = await api.put(`/api/college-admin/clubs/${club.id}/coordinators/${coordId}`, payload);
+            const updated = [...coordinators];
+            updated[index] = res.data.coordinator;
+            setCoordinators(updated);
+            toast('Coordinator updated successfully', 'success');
+        } catch (err) {
+            toast(err.response?.data?.error || 'Failed to update coordinator', 'error');
+        } finally {
+            setSavingCoordinatorId(null);
+        }
+    };
+
+    const handleDeleteCoordinator = async (coordId) => {
+        if (!window.confirm("Are you sure you want to remove this coordinator?")) return;
+        try {
+            await api.delete(`/api/college-admin/clubs/${club.id}/coordinators/${coordId}`);
+            setCoordinators(coordinators.filter(c => c.id !== coordId));
+            toast('Coordinator removed', 'success');
+        } catch (err) {
+            toast(err.response?.data?.error || 'Failed to remove coordinator', 'error');
+        }
+    };
+
+    const updateCoordField = (index, field, value) => {
+        const updated = [...coordinators];
+        updated[index][field] = value;
+        setCoordinators(updated);
+    };
+
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
-            <div className="bg-white/10 backdrop-blur-3xl border border-white/20 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden my-8 animate-fadeIn relative">
-                {/* Decorative glow */}
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4 overflow-hidden">
+            <div className="bg-[#0f172a] sm:bg-white/10 backdrop-blur-3xl border border-white/20 rounded-t-[2.5rem] sm:rounded-3xl w-full sm:max-w-2xl shadow-2xl overflow-hidden my-0 sm:my-8 animate-slideUp sm:animate-fadeIn relative flex flex-col max-h-[95vh] h-auto pb-8 sm:pb-0">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-[80px] pointer-events-none" />
                 
-                <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/5 relative z-10">
+                <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/5 relative z-10 shrink-0">
                     <h2 className="text-2xl font-display font-black text-white">Edit Club</h2>
                     <button onClick={onClose} className="text-slate-400 hover:text-white hover:bg-white/10 p-2 rounded-xl transition-all">
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-5 relative z-10">
-                    {/* Cover preview */}
-                    {coverPreview && (
-                        <div className="relative h-32 rounded-2xl overflow-hidden mb-2 border border-white/10 shadow-lg group">
-                            <img src={coverPreview} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="cover preview" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent flex flex-col justify-end p-4">
-                                <span className="text-white text-xs font-bold uppercase tracking-wider">Banner Preview</span>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Logo + Name row */}
-                    <div className="flex gap-5 items-center">
-                        {logoPreview && (
-                            <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-white/20 shadow-lg flex-shrink-0 bg-black/40 p-1">
-                                <img src={logoPreview} className="w-full h-full rounded-xl object-cover" alt="logo preview" />
+                <div className="overflow-y-auto flex-1 custom-scrollbar">
+                    {/* --- BASIC INFO TAB --- */}
+                    <form id="edit-club-form" onSubmit={handleSubmit} className="p-6 space-y-5 relative z-10">
+                        {coverPreview && (
+                            <div className="relative h-32 rounded-2xl overflow-hidden shadow-lg group">
+                                <img src={coverPreview} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="cover preview" />
                             </div>
                         )}
-                        <div className="flex-1">
-                            <label className="block text-sm font-bold text-slate-300 mb-2">Club Name *</label>
-                            <input type="text" name="name" required value={formData.name} onChange={handleChange} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-indigo-500/50 focus:bg-white/5 transition-all font-medium" />
-                        </div>
-                    </div>
 
-                    <div>
-                        <label className="block text-sm font-bold text-slate-300 mb-2">Description</label>
-                        <textarea name="description" rows="3" value={formData.description} onChange={handleChange} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-indigo-500/50 focus:bg-white/5 transition-all resize-none font-medium" />
-                    </div>
+                        <div className="flex gap-5 items-center">
+                            {logoPreview && (
+                                <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-white/20 shadow-lg flex-shrink-0 bg-black/40 p-1">
+                                    <img src={logoPreview} className="w-full h-full rounded-xl object-cover" alt="logo preview" />
+                                </div>
+                            )}
+                            <div className="flex-1">
+                                <label className="block text-sm font-bold text-slate-300 mb-2">Club Name *</label>
+                                <input type="text" name="name" required value={formData.name} onChange={handleChange} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-indigo-500/50 focus:bg-white/5 transition-all font-medium" />
+                            </div>
+                        </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                         <div>
-                            <label className="block text-sm font-bold text-slate-300 mb-2">Category</label>
-                            <select name="category" value={formData.category} onChange={handleChange} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-indigo-500/50 focus:bg-white/5 transition-all font-medium appearance-none">
-                                {['Technical', 'Sports', 'Cultural', 'Literary', 'Management', 'Alumni', 'Other'].map(c => <option key={c} value={c} className="bg-slate-900 text-white">{c}</option>)}
-                            </select>
+                            <label className="block text-sm font-bold text-slate-300 mb-2">Description</label>
+                            <textarea name="description" rows="3" value={formData.description} onChange={handleChange} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-indigo-500/50 focus:bg-white/5 transition-all resize-y font-medium" />
                         </div>
-                        <div>
-                            <label className="block text-sm font-bold text-slate-300 mb-2">Instagram</label>
-                            <input type="text" name="instagram" placeholder="@club_handle" value={formData.instagram} onChange={handleChange} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-indigo-500/50 focus:bg-white/5 transition-all font-medium" />
-                        </div>
-                    </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                        <div>
-                            <label className="block text-sm font-bold text-slate-300 mb-2">Club Logo</label>
-                            <input type="file" accept="image/*" onChange={handleLogoChange} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-slate-300 file:mr-4 file:py-1.5 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-500/20 file:text-indigo-300 hover:file:bg-indigo-500/30 outline-none transition-all cursor-pointer" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-bold text-slate-300 mb-2">Club Banner</label>
-                            <input type="file" accept="image/*" onChange={handleCoverChange} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-slate-300 file:mr-4 file:py-1.5 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-purple-500/20 file:text-purple-300 hover:file:bg-purple-500/30 outline-none transition-all cursor-pointer" />
-                        </div>
-                    </div>
-
-                    {/* Club Photos Gallery Manager */}
-                    <div className="pt-2 border-t border-white/10">
-                        <div className="flex items-center justify-between mb-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                             <div>
-                                <label className="text-slate-200 text-sm font-semibold block">📸 Club Photos <span className="text-slate-500 font-normal">(optional)</span></label>
-                                <p className="text-slate-500 text-xs mt-0.5">Up to 5 photos for the club's gallery</p>
+                                <label className="block text-sm font-bold text-slate-300 mb-2">Category</label>
+                                <select name="category" value={formData.category} onChange={handleCategoryChange} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-indigo-500/50 focus:bg-white/5 transition-all font-medium appearance-none">
+                                    {categories.map((cat, i) => <option key={i} value={cat} className="bg-slate-900 text-white">{cat}</option>)}
+                                    {!categories.length && <option value="Technical" className="bg-slate-900 text-white">Technical</option>}
+                                    <option value="Other" className="bg-slate-900 text-white">Other...</option>
+                                </select>
+                                {showCustomCategory && (
+                                    <input type="text" placeholder="Enter custom category" value={customCategory} onChange={(e) => setCustomCategory(e.target.value)} className="w-full mt-3 bg-indigo-900/20 border border-indigo-500/30 rounded-xl px-4 py-2 text-white outline-none focus:border-indigo-500 text-sm" />
+                                )}
                             </div>
-                            <span className={`text-sm font-semibold px-3 py-1 rounded-full ${clubPhotos.length >= 5 ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-700/50 text-slate-400'}`}>
-                                {clubPhotos.length} / 5
-                            </span>
+                            <div className="sm:col-span-1 lg:col-span-2">
+                                <label className="block text-sm font-bold text-slate-300 mb-2">Instagram</label>
+                                <input type="text" name="instagram" placeholder="@club_handle" value={formData.instagram} onChange={handleChange} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-indigo-500/50 focus:bg-white/5 transition-all font-medium" />
+                            </div>
                         </div>
 
-                        {clubPhotos.length < 5 && (
-                            <div
-                                onClick={() => photoInputRef.current?.click()}
-                                onDrop={e => { e.preventDefault(); setPhotoDragging(false); addPhotos(e.dataTransfer.files); }}
-                                onDragOver={e => { e.preventDefault(); setPhotoDragging(true); }}
-                                onDragLeave={() => setPhotoDragging(false)}
-                                className={`rounded-2xl border-2 border-dashed cursor-pointer p-6 text-center transition-all duration-200 mb-4 ${photoDragging ? 'border-purple-400 bg-purple-500/10' : 'border-slate-600 bg-slate-700/20 hover:border-purple-500/60'}`}
-                            >
-                                <p className="text-slate-300 text-sm font-medium">Drag & drop photos or click to browse</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                            <div>
+                                <label className="block text-sm font-bold text-slate-300 mb-2">Club Logo</label>
+                                <input type="file" accept="image/*" onChange={handleLogoChange} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-slate-300 file:text-xs file:font-semibold file:bg-indigo-500/20 file:text-indigo-300 hover:file:bg-indigo-500/30 outline-none transition-all cursor-pointer" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-slate-300 mb-2">Club Banner</label>
+                                <input type="file" accept="image/*" onChange={handleCoverChange} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-slate-300 file:text-xs file:font-semibold file:bg-purple-500/20 file:text-purple-300 hover:file:bg-purple-500/30 outline-none transition-all cursor-pointer" />
+                            </div>
+                        </div>
+
+                        {/* Club Gallery Manager */}
+                        <div className="pt-2 border-t border-white/10">
+                            <div className="flex items-center justify-between mb-3">
+                                <div>
+                                    <label className="text-slate-200 text-sm font-semibold block">📸 Club Gallery <span className="text-slate-500 font-normal">(optional)</span></label>
+                                    <p className="text-slate-500 text-xs mt-0.5">Up to 5 photos limits</p>
+                                </div>
+                                <span className={`text-sm font-semibold px-3 py-1 rounded-full ${clubPhotos.length >= 5 ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-700/50 text-slate-400'}`}>{clubPhotos.length} / 5</span>
+                            </div>
+
+                            {clubPhotos.length < 5 && (
+                                <div onClick={() => photoInputRef.current?.click()} onDrop={e => { e.preventDefault(); setPhotoDragging(false); addPhotos(e.dataTransfer.files); }} onDragOver={e => { e.preventDefault(); setPhotoDragging(true); }} onDragLeave={() => setPhotoDragging(false)} className={`rounded-xl border-2 border-dashed flex justify-center items-center cursor-pointer p-6 text-center transition-all min-h-24 duration-200 mb-4 ${photoDragging ? 'border-purple-400 bg-purple-500/10' : 'border-slate-600 bg-slate-700/20 hover:border-purple-500/60'}`}>
+                                    <p className="text-slate-300 text-sm font-medium">Drag & drop photos or click to browse</p>
+                                </div>
+                            )}
+
+                            <input ref={photoInputRef} type="file" accept="image/*" multiple onChange={e => addPhotos(e.target.files)} className="hidden" />
+
+                            {clubPhotos.length > 0 && (
+                                <div className="grid grid-cols-5 gap-2">
+                                    {clubPhotos.map((photo, i) => (
+                                        <div key={i} className="relative group rounded-xl overflow-hidden aspect-square bg-slate-700 border border-slate-600/50">
+                                            <img src={photo.preview} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+                                            <button type="button" onClick={() => removePhoto(i)} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 text-white text-sm font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">×</button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </form>
+
+                    {/* --- COORDINATORS MANAGER --- */}
+                    <div className="p-6 pt-0 space-y-5 border-t border-white/10 mt-2">
+                        <div className="flex justify-between items-center bg-white/5 p-3 rounded-xl mt-6 border border-white/10">
+                            <div>
+                                <h3 className="text-white font-bold text-sm">Club Coordinators <span className="text-slate-400 font-normal">({coordinators.length})</span></h3>
+                                <p className="text-xs text-slate-400">Managers have full access to this club</p>
+                            </div>
+                            {!showAddCoordinator && (
+                                <button type="button" onClick={() => setShowAddCoordinator(true)} className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg flex items-center gap-1 transition-all">
+                                    + Add New
+                                </button>
+                            )}
+                        </div>
+
+                        {showAddCoordinator && (
+                            <div className="bg-indigo-500/10 border border-indigo-500/30 p-5 rounded-2xl relative shadow-inner">
+                                <h4 className="text-indigo-300 font-bold mb-3 text-sm">New Coordinator Detail</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <input type="text" placeholder="Full Name" value={newCoordinator.name} onChange={(e) => setNewCoordinator({...newCoordinator, name: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500/50 outline-none" />
+                                    <input type="email" placeholder="Email Address" value={newCoordinator.email} onChange={(e) => setNewCoordinator({...newCoordinator, email: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500/50 outline-none" />
+                                    <input type="password" placeholder="Set Password" value={newCoordinator.password} onChange={(e) => setNewCoordinator({...newCoordinator, password: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500/50 outline-none md:col-span-2" />
+                                </div>
+                                <div className="mt-4 flex justify-end gap-2">
+                                    <button onClick={() => setShowAddCoordinator(false)} className="text-xs px-4 py-2 hover:bg-white/10 rounded-lg text-slate-300">Cancel</button>
+                                    <button onClick={handleAddCoordinator} className="text-xs px-4 py-2 bg-indigo-600 hover:bg-indigo-500 font-bold rounded-lg text-white">Save Coordinator</button>
+                                </div>
                             </div>
                         )}
 
-                        <input ref={photoInputRef} type="file" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp" multiple onChange={e => addPhotos(e.target.files)} className="hidden" />
-
-                        {clubPhotos.length > 0 && (
-                            <div className="grid grid-cols-5 gap-2">
-                                {clubPhotos.map((photo, i) => (
-                                    <div key={i} className="relative group rounded-xl overflow-hidden aspect-square bg-slate-700 border border-slate-600/50">
-                                        <img src={photo.preview} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
-                                        <button type="button" onClick={() => removePhoto(i)} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 text-white text-sm font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">×</button>
-                                        {photo.existing && (
-                                            <div className="absolute bottom-1 left-0 right-0 text-center">
-                                                <span className="text-xs bg-emerald-500/80 text-white px-2 rounded">saved</span>
-                                            </div>
-                                        )}
-                                        {i === 0 && (
-                                            <div className="absolute top-1 left-1">
-                                                <span className="text-[10px] bg-purple-500/80 text-white px-1.5 py-0.5 rounded-full font-bold">Cover</span>
-                                            </div>
-                                        )}
+                        {coordinators.map((coord, idx) => (
+                            <div key={coord.id || idx} className="bg-black/20 border border-white/10 p-4 rounded-xl relative flex flex-col gap-3 group">
+                                {coordinators.length > 1 && (
+                                    <button type="button" onClick={() => handleDeleteCoordinator(coord.id)} className="absolute -top-2 -right-2 w-6 h-6 bg-red-500/80 text-white hover:bg-red-500 rounded-full flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 shadow-lg z-10">
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                    </button>
+                                )}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-[10px] text-slate-400 uppercase font-bold ml-1">Name</label>
+                                        <input type="text" value={coord.name || ''} onChange={(e) => updateCoordField(idx, 'name', e.target.value)} className="w-full bg-white/5 border border-white/5 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-indigo-500/50 transition-all" />
                                     </div>
-                                ))}
+                                    <div>
+                                        <label className="text-[10px] text-slate-400 uppercase font-bold ml-1">Email</label>
+                                        <input type="email" value={coord.email || ''} onChange={(e) => updateCoordField(idx, 'email', e.target.value)} className="w-full bg-white/5 border border-white/5 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-indigo-500/50 transition-all font-mono" />
+                                    </div>
+                                    <div className="md:col-span-2 flex items-end gap-3">
+                                        <div className="flex-1">
+                                            <label className="text-[10px] text-slate-400 uppercase font-bold ml-1">Change Password (optional)</label>
+                                            <input type="password" placeholder="Leave blank to keep current" value={coord.password || ''} onChange={(e) => updateCoordField(idx, 'password', e.target.value)} className="w-full bg-white/5 border border-white/5 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-indigo-500/50 transition-all" />
+                                        </div>
+                                        <button onClick={() => handleUpdateCoordinator(coord.id, idx)} disabled={savingCoordinatorId === coord.id} className="text-xs font-bold px-4 py-1.5 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-white rounded-lg transition-all border border-emerald-500/30 whitespace-nowrap h-[34px]">
+                                            {savingCoordinatorId === coord.id ? 'Saving...' : 'Save Row'}
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
-                        )}
+                        ))}
                     </div>
+                </div>
 
-                    <div className="mt-8 flex justify-end gap-3 pt-6 border-t border-white/10">
-                        <button type="button" onClick={onClose} className="px-6 py-2.5 rounded-xl text-white font-bold hover:bg-white/10 border border-white/20 transition-all disabled:opacity-50">Cancel</button>
-                        <button type="submit" disabled={loading} className="px-8 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold transition-all shadow-[0_0_20px_rgba(99,102,241,0.3)] hover:shadow-[0_0_30px_rgba(99,102,241,0.4)] disabled:opacity-50 flex items-center gap-2">
-                            {loading ? (
-                                <>
-                                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                                    Saving...
-                                </>
-                            ) : '✓ Save Changes'}
-                        </button>
-                    </div>
-                </form>
+                <div className="p-6 border-t border-white/10 flex justify-end gap-3 shrink-0 bg-black/20 z-10">
+                    <button type="button" onClick={onClose} className="px-6 py-2.5 rounded-xl text-white font-bold hover:bg-white/10 border border-white/20 transition-all disabled:opacity-50">Cancel</button>
+                    <button type="submit" form="edit-club-form" disabled={loading} className="px-8 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold transition-all shadow-lg disabled:opacity-50 flex items-center gap-2">
+                        {loading ? 'Saving...' : 'Save Main Club Details'}
+                    </button>
+                </div>
             </div>
         </div>
     );

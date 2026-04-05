@@ -87,69 +87,77 @@ export default function EditEventModal({ isOpen, onClose, onSuccess, initialData
         judgeInput: '',
     });
 
-    useEffect(() => {
-        if (initialData) {
-            setFormData({
-                title: initialData.title || '',
-                description: initialData.description || '',
-                category: initialData.category || 'Technical',
-                eventDate: initialData.eventDate ? initialData.eventDate.split('T')[0] : '',
-                endDate: initialData.endDate ? initialData.endDate.split('T')[0] : '',
-                startTime: initialData.startTime || '',
-                endTime: initialData.endTime || '',
-                registrationDeadline: initialData.registrationDeadline ? initialData.registrationDeadline.split('T')[0] : '',
-                venue: initialData.venue || '',
-                maxParticipants: initialData.maxParticipants,
-                registrationFee: initialData.registrationFee ?? 0,
-                rules: initialData.rules || '',
-                eligibilityCriteria: initialData.eligibilityCriteria || 'Open to All',
-                eligibility: initialData.eligibility || '',
-                requiredMaterials: initialData.requiredMaterials || '',
-                themes: initialData.themes || [],
-                themeInput: '',
-                prizes: initialData.prizes || [],
-                eventScope: initialData.eventScope || 'INTRA',
-                venueMapLink: initialData.venueMapLink || '',
-                upiId: initialData.upiId || '',
-                upiName: initialData.upiName || '',
-                registrationType: initialData.registrationType || 'INDIVIDUAL',
-                teamMinSize: initialData.teamMinSize || 2,
-                teamMaxSize: initialData.teamMaxSize || 4,
-                maxTeams: initialData.maxTeams || 10,
-                topics: initialData.topics || [],
-                highlights: initialData.highlights || [],
-                chiefGuests: (initialData.chief_guests || []).map(g => ({
-                    name: typeof g === 'string' ? g : (g.name || ''),
-                    photo: null,
-                    photoPreview: typeof g === 'object' && g.photo ? `${BASE}${g.photo}` : null,
-                    existingPhoto: typeof g === 'object' ? g.photo : null,
-                    existing: true
-                })),
-                judges: (initialData.judges || []).map(j => ({
-                    name: typeof j === 'string' ? j : (j.name || ''),
-                    photo: null,
-                    photoPreview: typeof j === 'object' && j.photo ? `${BASE}${j.photo}` : null,
-                    existingPhoto: typeof j === 'object' ? j.photo : null,
-                    existing: true
-                })),
-                topicInput: '',
-                highlightInput: '',
-                guestInput: '',
-                judgeInput: '',
-            });
-            setIsFree((initialData.registrationFee ?? 0) === 0);
-            setIsUnlimited(initialData.maxParticipants === null || initialData.maxParticipants === undefined);
-            setMaxTeamsUnlimited(initialData.maxTeams === null || initialData.maxTeams === undefined);
-            setPreviewUrl(initialData.coverUrl ? `${BASE}${initialData.coverUrl}` : null);
-            setQrPreview(initialData.paymentQrUrl ? `${BASE}${initialData.paymentQrUrl}` : null);
+    const prevInitialDataId = useRef(null);
 
-            // Pre-populate photos
-            const existing = (initialData.eventPhotos || []).map(url => ({
-                file: null, preview: `${BASE}${url}`, existing: true, url
-            }));
-            setEventPhotos(existing);
+    useEffect(() => {
+        if (isOpen && initialData) {
+            if (prevInitialDataId.current !== initialData.id) {
+                setFormData({
+                    title: initialData.title || '',
+                    description: initialData.description || '',
+                    category: initialData.category || 'Technical',
+                    eventDate: initialData.eventDate ? initialData.eventDate.split('T')[0] : '',
+                    endDate: initialData.endDate ? initialData.endDate.split('T')[0] : '',
+                    startTime: initialData.startTime || '',
+                    endTime: initialData.endTime || '',
+                    registrationDeadline: initialData.registrationDeadline ? initialData.registrationDeadline.split('T')[0] : '',
+                    venue: initialData.venue || '',
+                    maxParticipants: initialData.maxParticipants,
+                    registrationFee: initialData.registrationFee ?? 0,
+                    rules: initialData.rules || '',
+                    eligibilityCriteria: initialData.eligibilityCriteria || 'Open to All',
+                    eligibility: initialData.eligibility || '',
+                    requiredMaterials: initialData.requiredMaterials || '',
+                    themes: initialData.themes || [],
+                    themeInput: '',
+                    prizes: initialData.prizes || [],
+                    eventScope: initialData.eventScope || 'INTRA',
+                    venueMapLink: initialData.venueMapLink || '',
+                    upiId: initialData.upiId || '',
+                    upiName: initialData.upiName || '',
+                    registrationType: initialData.registrationType || 'INDIVIDUAL',
+                    teamMinSize: initialData.teamMinSize || 2,
+                    teamMaxSize: initialData.teamMaxSize || 4,
+                    maxTeams: initialData.maxTeams || 10,
+                    topics: initialData.topics || [],
+                    highlights: initialData.highlights || [],
+                    chiefGuests: (initialData.chief_guests || []).map(g => ({
+                        name: typeof g === 'string' ? g : (g.name || ''),
+                        photo: null,
+                        photoPreview: typeof g === 'object' && g.photo ? `${BASE}${g.photo}` : null,
+                        existingPhoto: typeof g === 'object' ? g.photo : null,
+                        existing: true
+                    })),
+                    judges: (initialData.judges || []).map(j => ({
+                        name: typeof j === 'string' ? j : (j.name || ''),
+                        photo: null,
+                        photoPreview: typeof j === 'object' && j.photo ? `${BASE}${j.photo}` : null,
+                        existingPhoto: typeof j === 'object' ? j.photo : null,
+                        existing: true
+                    })),
+                    topicInput: '',
+                    highlightInput: '',
+                    guestInput: '',
+                    judgeInput: '',
+                });
+                setIsFree((initialData.registrationFee ?? 0) === 0);
+                setIsUnlimited(initialData.maxParticipants === null || initialData.maxParticipants === undefined);
+                setMaxTeamsUnlimited(initialData.maxTeams === null || initialData.maxTeams === undefined);
+                setPreviewUrl(initialData.coverUrl ? `${BASE}${initialData.coverUrl}` : null);
+                setQrPreview(initialData.paymentQrUrl ? `${BASE}${initialData.paymentQrUrl}` : null);
+
+                // Pre-populate photos
+                const existing = (initialData.eventPhotos || []).map(url => ({
+                    file: null, preview: `${BASE}${url}`, existing: true, url
+                }));
+                setEventPhotos(existing);
+                
+                prevInitialDataId.current = initialData.id;
+            }
+        } else if (!isOpen) {
+            prevInitialDataId.current = null;
         }
-    }, [initialData]);
+    }, [isOpen, initialData, BASE]);
 
     if (!isOpen) return null;
 
@@ -314,7 +322,8 @@ export default function EditEventModal({ isOpen, onClose, onSuccess, initialData
                 setError("Start date cannot be in the past"); return;
             }
 
-            if (formData.endDate && formData.endDate < formData.eventDate) {
+            if (!formData.endDate) { setError("End date is required"); return; }
+            if (formData.endDate < formData.eventDate) {
                 setError("End date cannot be before start date"); return;
             }
             if (!formData.startTime) { setError("Start time is required"); return; }
@@ -379,8 +388,8 @@ export default function EditEventModal({ isOpen, onClose, onSuccess, initialData
     const inputCls = "w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-indigo-500/50 focus:bg-white/5 transition-all font-medium";
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
-            <div className="bg-white/10 backdrop-blur-3xl border border-white/20 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden my-8 animate-fadeIn relative">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4 overflow-hidden">
+            <div className="bg-[#0f172a] sm:bg-white/10 backdrop-blur-3xl border border-white/20 rounded-t-[2.5rem] sm:rounded-3xl w-full sm:max-w-2xl shadow-2xl overflow-y-auto my-0 sm:my-8 animate-slideUp sm:animate-fadeIn relative max-h-[90vh] pb-8 sm:pb-0">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-[80px] pointer-events-none" />
 
                 <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/5 relative z-10">
@@ -551,8 +560,8 @@ export default function EditEventModal({ isOpen, onClose, onSuccess, initialData
                                     <input type="date" name="eventDate" required value={formData.eventDate} onChange={handleChange} className={`${inputCls} [color-scheme:dark]`} />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-slate-300 mb-2">End Date <span className="text-slate-500 font-normal">(optional)</span></label>
-                                    <input type="date" name="endDate" value={formData.endDate} min={formData.eventDate} onChange={handleChange} className={`${inputCls} [color-scheme:dark]`} />
+                                    <label className="block text-sm font-bold text-slate-300 mb-2">End Date <span className="text-red-400">*</span></label>
+                                    <input type="date" name="endDate" required value={formData.endDate} min={formData.eventDate} onChange={handleChange} className={`${inputCls} [color-scheme:dark]`} />
                                 </div>
                             </div>
                             {formData.endDate && formData.endDate !== formData.eventDate && (

@@ -6,6 +6,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 export default function MyTeams() {
     const [teams, setTeams] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [teamTab, setTeamTab] = useState("active"); // Section 4B
     const [submitting, setSubmitting] = useState(false);
     const [paymentRefs, setPaymentRefs] = useState({});
     const [selectedFiles, setSelectedFiles] = useState({}); // teamId -> File
@@ -58,6 +59,16 @@ export default function MyTeams() {
 
     if (loading) return <LoadingSpinner />;
 
+    // Section 4B: filter teams by event date
+    const isEventOver = (team) => {
+        if (team.eventStatus === "COMPLETED") return true;
+        if (!team.eventDate) return false;
+        return new Date(team.eventDate) < new Date();
+    };
+    const displayTeams = teams.filter(t =>
+        teamTab === "active" ? !isEventOver(t) : isEventOver(t)
+    );
+
     return (
         <div className="space-y-12 animate-fadeIn relative pb-20">
             <div className="absolute top-0 left-0 w-full max-w-lg h-96 bg-purple-500/10 rounded-full blur-[100px] pointer-events-none -z-10" />
@@ -66,11 +77,30 @@ export default function MyTeams() {
                 <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/20 rounded-full blur-[80px] -z-10" />
                 <h1 className="text-4xl font-display font-bold text-white mb-2 tracking-tight">My <span className="text-purple-400">Teams</span></h1>
                 <p className="text-slate-400 text-lg font-body">Track your team registrations and membership status</p>
+
+                {/* Section 4B — Filter Tabs */}
+                <div className="flex gap-2 overflow-x-auto pb-1 mt-4 -mx-4 px-4 scrollbar-none" style={{scrollbarWidth:"none"}}>
+                    {[
+                        { id: 'active', label: 'Active Teams', icon: '👥' },
+                        { id: 'past', label: 'Past Teams', icon: '📜' },
+                    ].map(opt => (
+                        <button key={opt.id}
+                            onClick={() => setTeamTab(opt.id)}
+                            className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-medium transition-all min-h-[40px] whitespace-nowrap ${
+                            teamTab === opt.id
+                                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
+                                : "bg-slate-800 text-slate-400 border border-slate-700"
+                            }`}>
+                            <span>{opt.icon}</span>
+                            <span>{opt.label}</span>
+                        </button>
+                    ))}
+                </div>
             </div>
 
             <div className="grid grid-cols-1 gap-8 relative z-10">
-                {teams.length > 0 ? (
-                    teams.map(team => (
+                {displayTeams.length > 0 ? (
+                    displayTeams.map(team => (
                         <div key={team.id} className="bg-[#1e293b]/40 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden group">
                             <div className="absolute -right-16 -top-16 w-64 h-64 bg-purple-500/5 rounded-full blur-[60px] group-hover:bg-purple-500/10 transition-all pointer-events-none" />
                             
@@ -87,10 +117,12 @@ export default function MyTeams() {
                                         <div className="flex flex-col items-end gap-2">
                                             <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${
                                                 team.status === 'COMPLETED' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20' :
-                                                team.status === 'AWAITING_PAYMENT' ? 'bg-amber-500/20 text-amber-400 border-amber-500/20 animate-pulse' :
+                                                team.status === 'AWAITING_PAYMENT' ? 'bg-amber-500/20 text-amber-400 border-amber-500/20' :
                                                 'bg-indigo-500/20 text-indigo-400 border-indigo-500/20'
-                                            }`}>
-                                                {team.status === 'COMPLETED' ? '✓ REGISTERED' : team.status.replace('_', ' ')}
+                                            } ${(team.status === 'AWAITING_PAYMENT' && !team.payment_screenshot) ? 'animate-pulse' : ''}`}>
+                                                {team.status === 'COMPLETED' ? '✓ REGISTERED' : 
+                                                 (team.status === 'AWAITING_PAYMENT' && team.payment_screenshot) ? 'REGISTRATION DONE' : 
+                                                 team.status.replace('_', ' ')}
                                             </span>
                                             {team.payment_status === 'PAID' && (
                                                 <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest italic flex items-center gap-1">

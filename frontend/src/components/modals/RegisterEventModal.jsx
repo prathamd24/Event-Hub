@@ -65,8 +65,8 @@ export default function RegisterEventModal({ isOpen, onClose, event, onSuccess }
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto font-sans">
-            <div className="bg-[#0f172a] border border-white/10 rounded-[2.5rem] w-full max-w-lg shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] overflow-hidden animate-fadeIn relative my-auto">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4 overflow-hidden font-sans">
+            <div className="bg-[#0f172a] border border-white/10 rounded-t-[2.5rem] sm:rounded-[2.5rem] w-full sm:max-w-lg shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] overflow-y-auto animate-slideUp sm:animate-fadeIn relative my-0 sm:my-auto max-h-[90vh] pb-8 sm:pb-0">
                 {/* Visual accents */}
                 <div className="absolute -top-24 -right-24 w-64 h-64 bg-indigo-500/10 rounded-full blur-[80px] pointer-events-none" />
                 <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-emerald-500/5 rounded-full blur-[80px] pointer-events-none" />

@@ -6,12 +6,12 @@ import EventCard from '../components/EventCard';
 import LoadingSpinner from '../components/LoadingSpinner';
 import RegisterEventModal from '../components/modals/RegisterEventModal';
 import TeamRegisterModal from '../components/modals/TeamRegisterModal';
-
-const CATEGORIES = ['', 'Technical', 'Sports', 'Cultural', 'Literary', 'Management', 'Alumni'];
+import Footer from '../components/Footer';
 
 export default function EventsPage() {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [categories, setCategories] = useState(['Technical', 'Sports', 'Cultural', 'Literary', 'Management', 'Alumni']);
     const [search, setSearch] = useState('');
     const [category, setCategory] = useState('');
     const [myRegistrations, setMyRegistrations] = useState([]);
@@ -52,7 +52,6 @@ export default function EventsPage() {
                                         !studentEvents.some(se => se.id === e.id)
                                     )
                                 ];
-                                // Filter only UPCOMING and ONGOING + Not Expired
                                 const now = new Date();
                                 const upcoming = merged.filter(e => {
                                     if (!["UPCOMING", "ONGOING"].includes(e.status)) return false;
@@ -60,6 +59,13 @@ export default function EventsPage() {
                                     const endDateTime = new Date(`${endStr}T${e.endTime || '23:59:59'}`);
                                     return endDateTime > now;
                                 });
+                                
+                                const uniqueCats = Array.from(new Set(merged.map(e => e.category).filter(Boolean)));
+                                if (uniqueCats.length > 0) {
+                                    const defaults = ['Technical', 'Sports', 'Cultural', 'Literary', 'Management', 'Alumni'];
+                                    setCategories(Array.from(new Set([...defaults, ...uniqueCats])));
+                                }
+                                
                                 setEvents(upcoming);
                             } catch {
                                 const upcoming = allEvents.filter(e => ["UPCOMING", "ONGOING"].includes(e.status));
@@ -105,6 +111,9 @@ export default function EventsPage() {
 
         if (!authLoading) {
             fetchEvents();
+            // Re-fetch every 5 minutes to pick up status changes
+            const interval = setInterval(fetchEvents, 5 * 60 * 1000);
+            return () => clearInterval(interval);
         }
     }, [user, authLoading]);
 
@@ -152,20 +161,25 @@ export default function EventsPage() {
                             />
                         </div>
                     </div>
-                    
-                    <div className="relative group sm:w-64">
-                        <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl blur opacity-0 group-hover:opacity-20 transition-opacity duration-300" />
-                        <select
-                            value={category}
-                            onChange={e => setCategory(e.target.value)}
-                            className="w-full relative bg-[#1e293b] text-white border border-white/10 rounded-xl px-4 py-3.5 appearance-none focus:outline-none focus:border-purple-500/70 hover:border-purple-500/50 transition-all duration-300 font-bold tracking-wide"
+                </div>
+
+                {/* Scope / Category Chips under the search bar */}
+                <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none" style={{scrollbarWidth:"none"}}>
+                    <button 
+                        onClick={() => setCategory('')} 
+                        className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-medium transition-all min-h-[40px] whitespace-nowrap ${!category ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25" : "bg-slate-800 text-slate-400 border border-slate-700"}`}
+                    >
+                        <span>All Categories</span>
+                    </button>
+                    {categories.map(c => (
+                        <button 
+                            key={c}
+                            onClick={() => setCategory(c)} 
+                            className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-medium transition-all min-h-[40px] whitespace-nowrap ${category === c ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25" : "bg-slate-800 text-slate-400 border border-slate-700"}`}
                         >
-                            {CATEGORIES.map(c => (
-                                <option key={c} value={c}>{c || 'All Categories'}</option>
-                            ))}
-                        </select>
-                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">▼</span>
-                    </div>
+                            <span>{c}</span>
+                        </button>
+                    ))}
                 </div>
             </div>
 
@@ -211,18 +225,7 @@ export default function EventsPage() {
             )}
             
             {/* Premium Footer */}
-            <footer className="border-t border-white/10 pt-16 pb-8 mt-32 relative">
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1/2 h-px bg-gradient-to-r from-transparent via-purple-500/50 to-transparent" />
-                <div className="text-center">
-                    <div className="flex justify-center items-center gap-3 mb-6">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-indigo-500/30">
-                            E
-                        </div>
-                        <span className="text-2xl font-display font-bold text-white tracking-tight">EventHub</span>
-                    </div>
-                    <p className="text-slate-500 font-body">&copy; 2026 College Event Hub. Designed with premium aesthetics.</p>
-                </div>
-            </footer>
+            <Footer />
             {/* Registration Modals */}
             {selectedEvent && !showTeamModal && (
                 <RegisterEventModal

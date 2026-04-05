@@ -60,7 +60,12 @@ const ClubCard = ({ club }) => {
                 <div className="min-w-0">
                     <h3 className="text-white font-bold text-sm line-clamp-1 group-hover:text-purple-300 transition-colors">{club.name}</h3>
                     {club.coordinatorName && (
-                        <p className="text-slate-500 text-xs flex items-center gap-1">👤 {club.coordinatorName}</p>
+                        <div className="flex flex-col pt-0.5">
+                            <p className="text-slate-400 text-xs flex items-center gap-1 truncate" title={club.coordinatorName}>👤 {club.coordinatorName}</p>
+                            {club.coordinatorEmail && (
+                                <p className="text-slate-500 text-[10px] pl-4 truncate" title={club.coordinatorEmail}>{club.coordinatorEmail}</p>
+                            )}
+                        </div>
                     )}
                 </div>
             </div>
