@@ -447,6 +447,41 @@ export function GodModeTab({
                             <div className="text-center py-8 text-slate-500 text-sm italic">Click Refresh to load table statistics.</div>
                         )}
                     </div>
+
+                    {/* DANGER ZONE: Nuke Data */}
+                    <div className="lg:col-span-2 bg-red-500/5 backdrop-blur-xl border border-red-500/20 rounded-3xl p-8 space-y-4">
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="w-12 h-12 rounded-2xl bg-red-500/20 flex items-center justify-center text-2xl">☢️</div>
+                            <div>
+                                <h3 className="text-red-400 font-black text-xl">Danger Zone: Pure Reset</h3>
+                                <p className="text-slate-400 text-sm">Wipe all users, colleges, clubs, and events. Only Platform Admins survive.</p>
+                            </div>
+                        </div>
+                        
+                        <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl">
+                            <p className="text-red-400 text-xs font-bold uppercase tracking-widest mb-3">⚠️ IRREVERSIBLE ACTION</p>
+                            <p className="text-slate-300 text-sm mb-4">
+                                Use this before official launch to clear all test registrations. All Firebase auth connections will remain, but database associations will be purged.
+                            </p>
+                            <button 
+                                onClick={async () => {
+                                    const confirmKey = prompt('To confirm, type: NUKE_ALL_DATA');
+                                    if (confirmKey === 'NUKE_ALL_DATA') {
+                                        try {
+                                            const res = await api.post('/api/platform-admin/nuke-test-data', { confirm: 'NUKE_ALL_DATA' });
+                                            toast(res.data.message, 'success');
+                                            loadDbHealth();
+                                        } catch (e) {
+                                            toast(e.response?.data?.error || 'Nuke failed', 'error');
+                                        }
+                                    }
+                                }}
+                                className="w-full py-4 bg-red-600 hover:bg-red-500 text-white font-black rounded-xl transition-all shadow-[0_0_30px_rgba(220,38,38,0.3)]"
+                            >
+                                ☢️ NUKE ALL TEST DATA
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
 

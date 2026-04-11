@@ -3,8 +3,7 @@ import { useParams } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from '../../components/Toast';
 import { exportToExcel } from '../../utils/exportToExcel';
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
+import { BACKEND_URL } from '../../config';
 
 export default function ClubRegistrations() {
     const { clubId } = useParams();
