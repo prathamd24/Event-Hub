@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: event-hub-backend
+    env: python
+    rootDir: backend
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python run_migrations.py && gunicorn \"app:create_app()\" --bind 0.0.0.0:$PORT"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: FIREBASE_CREDENTIALS
+        sync: false
+      - key: PYTHON_VERSION
+        value: "3.11.0"
