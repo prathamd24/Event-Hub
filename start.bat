@@ -6,3 +6,4 @@ start cmd /k "cd frontend && npm run dev"
 
 echo Servers are starting in new windows.
 
+            
