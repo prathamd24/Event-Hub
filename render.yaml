@@ -3,7 +3,7 @@ services:
     name: event-hub-backend
     env: python
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "cd backend && python run_migrations.py && gunicorn \"app:create_app()\" --bind 0.0.0.0:$PORT"
+    startCommand: "cd backend && gunicorn \"app:create_app()\" --bind 0.0.0.0:$PORT"
     envVars:
       - key: DATABASE_URL
         sync: false
@@ -11,5 +11,7 @@ services:
         sync: false
       - key: FIREBASE_CREDENTIALS
         sync: false
+      - key: RUN_MIGRATIONS
+        value: "true"
       - key: PYTHON_VERSION
         value: "3.11.0"
