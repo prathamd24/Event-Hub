@@ -242,7 +242,8 @@ def get_users():
 
     # ── 1. Get all DB users (excluding platform admin) ──────────────────
     db_users = User.query.filter(User.role != 'PLATFORM_ADMIN').order_by(User.created_at.desc()).all()
-    db_by_email = {u.email.lower(): u for u in db_users}
+    # Use strip().lower() on both sides to handle any whitespace/case differences
+    db_by_email = {(u.email or '').strip().lower(): u for u in db_users}
     db_by_uid   = {u.firebase_uid: u for u in db_users if u.firebase_uid}
 
     result = []
@@ -251,6 +252,9 @@ def get_users():
     for u in db_users:
         d = u.to_dict()
         d['source'] = 'database'
+        # Enrich college name: use college_name_manual as fallback if college_id not linked
+        if not d.get('collegeName') and u.college_name_manual:
+            d['collegeName'] = u.college_name_manual + ' (unverified)'
         d['missingCollege'] = (
             u.college_id is None
             and not u.college_name_manual
@@ -260,16 +264,14 @@ def get_users():
 
     # ── 3. Pull Firebase users and find orphans (not in DB) ─────────────
     try:
-        firebase_emails_seen = set()
         page = firebase_auth.list_users()
         while page:
             for fb_user in page.users:
-                email = (fb_user.email or '').lower()
+                email = (fb_user.email or '').strip().lower()
                 uid   = fb_user.uid
-                firebase_emails_seen.add(email)
 
                 # Skip platform admin
-                if email == PLATFORM_ADMIN_EMAIL:
+                if email == PLATFORM_ADMIN_EMAIL.lower():
                     continue
 
                 # Already in DB? Skip (already added above)
@@ -299,23 +301,17 @@ def get_users():
 
     except Exception as e:
         print(f'[platform_admin/users] Firebase list error: {e}')
-        # Return DB users only if Firebase call fails
         pass
 
-    # Sort: DB users first (by created_at desc), then Firebase-only
-    result.sort(key=lambda x: (x['source'] != 'database', x.get('createdAt') or ''), reverse=False)
-    # Stable sort: database first, within each group newest first
-    from functools import cmp_to_key
-    def sort_key(x):
-        order = 0 if x['source'] == 'database' else 1
-        ts = x.get('createdAt') or ''
-        return (order, [-ord(c) for c in ts])  # negate for desc within group
+    # Sort: DB users first (newest first), then Firebase-only (newest first)
+    result.sort(key=lambda x: (0 if x['source'] == 'database' else 1, x.get('createdAt') or ''), reverse=False)
 
     return jsonify(result), 200
 
 
 @platform_admin_bp.route('/users/<int:user_id>', methods=['DELETE'])
 @role_required('PLATFORM_ADMIN')
+
 def delete_user(user_id):
     user = User.query.get_or_404(user_id)
     if user.role == 'PLATFORM_ADMIN':

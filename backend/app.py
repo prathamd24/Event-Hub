@@ -254,6 +254,28 @@ def run_migrations(app):
                     print(f'[Cleanup] email-as-college fix: {e}')
                     conn.rollback()
 
+                # ── Auto-link students whose college_name_manual matches a college name ──
+                # Handles case-insensitive mismatches (e.g. "echelon institute..." vs
+                # "Echelon Institute...") for students who registered before college
+                # was on the platform.
+                try:
+                    result = conn.execute(text("""
+                        UPDATE users u
+                        SET college_id = c.id,
+                            college_name_manual = NULL
+                        FROM colleges c
+                        WHERE u.college_id IS NULL
+                          AND u.college_name_manual IS NOT NULL
+                          AND LOWER(TRIM(u.college_name_manual)) = LOWER(TRIM(c.name))
+                          AND c.status = 'APPROVED'
+                          AND u.role = 'STUDENT'
+                    """))
+                    conn.commit()
+                    print(f'[AutoLink] Linked {result.rowcount} student(s) to colleges via name match')
+                except Exception as e:
+                    print(f'[AutoLink] college name link error: {e}')
+                    conn.rollback()
+
         except Exception as e:
             print(f'Migration script error: {e}')
         seed_platform_admin()
