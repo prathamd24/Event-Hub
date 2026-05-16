@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
 import { toast } from '../components/Toast';
@@ -7,12 +7,25 @@ import { auth, googleProvider } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import Footer from '../components/Footer';
 
+// Domains that are obviously not institutional (no auto-detect)
+const FREE_DOMAINS = new Set([
+    'gmail.com','yahoo.com','hotmail.com','outlook.com','live.com',
+    'icloud.com','me.com','protonmail.com','ymail.com','rediffmail.com','aol.com'
+]);
+
+function isInstitutionalEmail(email) {
+    if (!email || !email.includes('@')) return false;
+    return !FREE_DOMAINS.has(email.split('@')[1].toLowerCase());
+}
+
 export default function RegisterPage() {
-    const [colleges, setColleges] = useState([]);
-    const [collegeSearch, setCollegeSearch] = useState('');
+    const [colleges, setColleges]             = useState([]);
+    const [collegeSearch, setCollegeSearch]   = useState('');
     const [selectedCollegeId, setSelectedCollegeId] = useState('');
-    const [showDropdown, setShowDropdown] = useState(false);
-    const [loading, setLoading] = useState(false);
+    const [showDropdown, setShowDropdown]     = useState(false);
+    const [loading, setLoading]               = useState(false);
+    const [autoDetecting, setAutoDetecting]   = useState(false);
+    const [autoDetectedCollege, setAutoDetectedCollege] = useState(null); // { id, name }
     const navigate = useNavigate();
     const { setUser } = useAuth();
 
@@ -24,6 +37,25 @@ export default function RegisterPage() {
         api.get('/api/public/colleges').then(res => setColleges(res.data));
     }, []);
 
+    // Auto-detect college from institutional email domain
+    const detectCollegeFromEmail = useCallback(async (email) => {
+        if (!isInstitutionalEmail(email)) return;
+        setAutoDetecting(true);
+        try {
+            const res = await api.get(`/api/auth/detect-college?email=${encodeURIComponent(email)}`);
+            if (res.data.collegeId) {
+                setAutoDetectedCollege({ id: res.data.collegeId, name: res.data.collegeName });
+                setSelectedCollegeId(res.data.collegeId);
+                setCollegeSearch(res.data.collegeName);
+                toast(`🏫 College auto-detected: ${res.data.collegeName}`, 'success');
+            }
+        } catch {
+            // Silently ignore — user can still type manually
+        } finally {
+            setAutoDetecting(false);
+        }
+    }, []);
+
     const handleGoogleRegister = async () => {
         if (!selectedCollegeId && !collegeSearch.trim()) {
             toast('Please select or type your college name first.', 'error');
@@ -33,15 +65,48 @@ export default function RegisterPage() {
         setLoading(true);
         sessionStorage.setItem('registration_in_progress', 'true');
         try {
-            // signInWithPopup gives us the result immediately — no redirect needed
             const result = await signInWithPopup(auth, googleProvider);
+            const email  = result.user.email || '';
             const idToken = await result.user.getIdToken();
 
+            // ── Auto-detect college from institutional email ───────────────────
+            let finalCollegeId   = selectedCollegeId || null;
+            let finalCollegeName = !selectedCollegeId ? collegeSearch : null;
+
+            if (isInstitutionalEmail(email) && !finalCollegeId) {
+                // Try server-side detection using the actual Google email
+                try {
+                    const detect = await api.get(`/api/auth/detect-college?email=${encodeURIComponent(email)}`);
+                    if (detect.data.collegeId) {
+                        finalCollegeId   = detect.data.collegeId;
+                        finalCollegeName = null; // college properly linked, no manual name needed
+                    }
+                } catch {
+                    // Keep whatever the user typed
+                }
+            }
+
+            // ── Guard: institutional email MUST have a college ────────────────
+            if (isInstitutionalEmail(email) && !finalCollegeId && !finalCollegeName) {
+                // Sign the user back out of Firebase so they can try again
+                await auth.signOut();
+                toast(
+                    `Your email domain (@${email.split('@')[1]}) belongs to a college. ` +
+                    'Please type your college name before continuing.',
+                    'error'
+                );
+                setLoading(false);
+                sessionStorage.removeItem('registration_in_progress');
+                // Trigger auto-detect UI
+                detectCollegeFromEmail(email);
+                return;
+            }
+
             const res = await api.post('/api/auth/register', {
-                name: result.user.displayName || result.user.email?.split('@')[0] || 'Student',
-                email: result.user.email,
-                collegeId: selectedCollegeId || null,
-                collegeNameManual: !selectedCollegeId ? collegeSearch : null
+                name:             result.user.displayName || email.split('@')[0] || 'Student',
+                email,
+                collegeId:        finalCollegeId,
+                collegeNameManual: finalCollegeName || null,
             }, {
                 headers: { Authorization: `Bearer ${idToken}` }
             });
@@ -52,7 +117,6 @@ export default function RegisterPage() {
             navigate('/');
         } catch (err) {
             sessionStorage.removeItem('registration_in_progress');
-            // User closed the popup
             if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
                 setLoading(false);
                 return;
@@ -116,6 +180,7 @@ export default function RegisterPage() {
                         <div className="mb-6 space-y-1.5 relative">
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-1">
                                 Your College <span className="text-red-400">*</span>
+                                {autoDetecting && <span className="text-indigo-400 ml-2 normal-case font-normal">detecting…</span>}
                             </label>
                             <div className="relative group">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500 group-focus-within:text-indigo-400 transition-colors">🏛️</div>
@@ -126,6 +191,7 @@ export default function RegisterPage() {
                                     onChange={(e) => {
                                         setCollegeSearch(e.target.value);
                                         setSelectedCollegeId('');
+                                        setAutoDetectedCollege(null);
                                         setShowDropdown(true);
                                     }}
                                     onFocus={() => setShowDropdown(true)}
@@ -143,6 +209,7 @@ export default function RegisterPage() {
                                             onClick={() => {
                                                 setSelectedCollegeId(college.id);
                                                 setCollegeSearch(college.name);
+                                                setAutoDetectedCollege(null);
                                                 setShowDropdown(false);
                                             }}
                                         >
@@ -161,7 +228,13 @@ export default function RegisterPage() {
                                 </div>
                             )}
 
-                            {selectedCollegeId && (
+                            {/* Status messages */}
+                            {autoDetectedCollege && (
+                                <p className="text-indigo-400 text-xs pl-1 flex items-center gap-1">
+                                    🔍 Auto-detected from your email domain ✓
+                                </p>
+                            )}
+                            {selectedCollegeId && !autoDetectedCollege && (
                                 <p className="text-emerald-400 text-xs pl-1">✓ College selected</p>
                             )}
                             {collegeSearch && !selectedCollegeId && !showDropdown && (
@@ -171,10 +244,17 @@ export default function RegisterPage() {
                             )}
                         </div>
 
+                        {/* Info box for institutional email users */}
+                        <div className="mb-5 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                            <p className="text-blue-300 text-xs font-medium">
+                                💡 <strong>Using a college email?</strong> Your college will be auto-detected from your email domain when you sign in with Google.
+                            </p>
+                        </div>
+
                         {/* Google Register Button */}
                         <button
                             onClick={handleGoogleRegister}
-                            disabled={loading}
+                            disabled={loading || autoDetecting}
                             type="button"
                             className="w-full flex justify-center items-center gap-3 py-4 px-6 rounded-xl bg-white text-slate-800 font-bold text-sm transition-all hover:bg-slate-100 disabled:opacity-50 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
                         >
@@ -221,7 +301,6 @@ export default function RegisterPage() {
                 ←
             </Link>
 
-            {/* Premium Footer */}
             <Footer />
         </div>
     );

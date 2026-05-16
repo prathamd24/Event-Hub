@@ -209,3 +209,58 @@ def register_college():
 def me():
     # User is already resolved by jwt_required
     return jsonify(request.user.to_dict()), 200
+
+
+@auth_bp.route('/detect-college', methods=['GET'])
+def detect_college():
+    """
+    Given ?email=student@eitfaridabad.co.in, tries to find a matching
+    approved college in the DB by comparing the email domain against
+    known college email patterns.
+    Returns { collegeId, collegeName } or {} if no match.
+    """
+    email = request.args.get('email', '').strip().lower()
+    if not email or '@' not in email:
+        return jsonify({}), 200
+
+    domain = email.split('@')[1]  # e.g. "eitfaridabad.co.in"
+
+    # Free email providers — no college detection
+    free_domains = {
+        'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com',
+        'live.com', 'icloud.com', 'me.com', 'protonmail.com',
+        'ymail.com', 'rediffmail.com', 'aol.com'
+    }
+    if domain in free_domains:
+        return jsonify({}), 200
+
+    # Strip prefix parts of domain to get broader match
+    # e.g. "eitfaridabad.co.in" → try "eitfaridabad"
+    domain_parts = domain.replace('.co.in', '').replace('.ac.in', '') \
+                         .replace('.edu.in', '').replace('.edu', '') \
+                         .replace('.org', '').replace('.net', '')
+
+    # Search approved colleges whose name contains domain keywords
+    colleges = College.query.filter_by(status='APPROVED').all()
+
+    def score(college):
+        name_lower = college.name.lower()
+        # Direct domain keyword match
+        for part in domain_parts.split('.'):
+            if len(part) > 3 and part in name_lower:
+                return 2
+        # Contact email domain match
+        if college.contact_email and '@' in college.contact_email:
+            if college.contact_email.split('@')[1].lower() == domain:
+                return 3
+        return 0
+
+    best = max(colleges, key=score, default=None)
+    if best and score(best) > 0:
+        return jsonify({
+            'collegeId': best.id,
+            'collegeName': best.name,
+            'confidence': score(best)
+        }), 200
+
+    return jsonify({}), 200

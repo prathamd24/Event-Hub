@@ -222,6 +222,38 @@ def run_migrations(app):
                     print(f'[Migration] notifications: {e}')
                     conn.rollback()
 
+                # ── Cleanup: remove DB users whose Firebase account was deleted ────
+                # These users exist in DB but are gone from Firebase;
+                # they will re-register fresh with correct college info.
+                try:
+                    orphaned_emails = [
+                        '24-cse-ds-016hunny@eitfaridabad.co.in',
+                        '24-cse-ds-034pratham@eitfaridabad.co.in',
+                    ]
+                    deleted = conn.execute(
+                        text("DELETE FROM users WHERE email = ANY(:emails) AND role = 'STUDENT'"),
+                        {'emails': orphaned_emails}
+                    )
+                    conn.commit()
+                    print(f'[Cleanup] Removed {deleted.rowcount} orphaned student account(s)')
+                except Exception as e:
+                    print(f'[Cleanup] orphaned users: {e}')
+                    conn.rollback()
+
+                # ── Cleanup: fix users whose college_name_manual was set to their email ──
+                try:
+                    conn.execute(text("""
+                        UPDATE users
+                        SET college_name_manual = NULL
+                        WHERE college_name_manual IS NOT NULL
+                          AND college_name_manual LIKE '%@%'
+                    """))
+                    conn.commit()
+                    print('[Cleanup] Fixed email-as-college_name_manual entries')
+                except Exception as e:
+                    print(f'[Cleanup] email-as-college fix: {e}')
+                    conn.rollback()
+
         except Exception as e:
             print(f'Migration script error: {e}')
         seed_platform_admin()
