@@ -1,0 +1,17 @@
+flask
+flask-sqlalchemy
+flask-jwt-extended
+flask-cors
+flask-bcrypt
+psycopg2-binary
+python-dotenv
+pillow
+firebase-admin==6.5.0
+gunicorn
+APScheduler==3.10.4
+Flask-Limiter==3.5.0
+cloudinary==1.36.0
+Werkzeug>=2.3.0
+google-generativeai==0.8.3
+google-ai-generativelanguage==0.6.10
+protobuf==5.28.2

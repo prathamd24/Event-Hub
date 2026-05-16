@@ -1,0 +1,23 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+
+# Sensitive credentials - NEVER push these to GitHub
+firebase-admin.json
+
+# Temp files created during development
+db_error.txt
+migration_success.txt
+init_cloud_db.py
+migration_error.txt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Uploads folder (user-uploaded files should not be in git)
+uploads/
