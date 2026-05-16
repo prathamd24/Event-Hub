@@ -318,9 +318,79 @@ def cleanup_expired_otps(app=None):
         if ctx:
             ctx.pop()
 
+def sync_firebase_users(app=None):
+    """
+    Background task: sync Firebase Auth state → DB every 5 minutes.
+    - User deleted in Firebase  → delete from DB
+    - User disabled in Firebase → set is_active = False in DB
+    - User re-enabled in Firebase → set is_active = True in DB
+    """
+    ctx = app.app_context() if app else None
+    try:
+        if ctx:
+            ctx.push()
+
+        import firebase_admin
+        from firebase_admin import auth as firebase_auth
+
+        # Build a map of {email → firebase_user} from Firebase
+        fb_map = {}  # email → {'disabled': bool}
+        page = firebase_auth.list_users()
+        while page:
+            for fb_user in page.users:
+                if fb_user.email:
+                    fb_map[fb_user.email.lower()] = {
+                        'uid': fb_user.uid,
+                        'disabled': fb_user.disabled,
+                    }
+            page = page.get_next_page()
+
+        # Get all non-platform-admin DB users that use Firebase auth
+        firebase_db_users = User.query.filter(
+            User.role != 'PLATFORM_ADMIN',
+            User.password_hash == 'FIREBASE_AUTH'
+        ).all()
+
+        deleted_count  = 0
+        disabled_count = 0
+        enabled_count  = 0
+
+        for user in firebase_db_users:
+            email = (user.email or '').lower()
+            fb    = fb_map.get(email)
+
+            if fb is None:
+                # User was deleted from Firebase — remove from DB too
+                db.session.delete(user)
+                deleted_count += 1
+            elif fb['disabled'] and user.is_active:
+                # Disabled in Firebase → deactivate in DB
+                user.is_active = False
+                disabled_count += 1
+            elif not fb['disabled'] and not user.is_active:
+                # Re-enabled in Firebase → activate in DB
+                user.is_active = True
+                enabled_count += 1
+
+        if deleted_count or disabled_count or enabled_count:
+            db.session.commit()
+            print(
+                f'[Firebase Sync] deleted={deleted_count} '
+                f'deactivated={disabled_count} reactivated={enabled_count}'
+            )
+        else:
+            print('[Firebase Sync] All users in sync ✓')
+
+    except Exception as e:
+        db.session.rollback()
+        print(f'[Firebase Sync] Error: {e}')
+    finally:
+        if ctx:
+            ctx.pop()
+
 
 def start_scheduler(app):
-    """Start APScheduler to run event status updates every 5 minutes."""
+    """Start APScheduler to run background jobs every 5 minutes."""
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
         scheduler = BackgroundScheduler(daemon=True)
@@ -340,8 +410,16 @@ def start_scheduler(app):
             id="otp_cleanup",
             replace_existing=True,
         )
+        scheduler.add_job(
+            func=sync_firebase_users,
+            kwargs={"app": app},
+            trigger="interval",
+            minutes=5,
+            id="firebase_user_sync",
+            replace_existing=True,
+        )
         scheduler.start()
-        print("[Scheduler] APScheduler started — event statuses update every 5 minutes")
+        print("[Scheduler] APScheduler started — event statuses + Firebase sync every 5 minutes")
         return scheduler
     except Exception as e:
         print(f"[Scheduler] Failed to start: {e}")
