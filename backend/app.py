@@ -177,10 +177,11 @@ def run_migrations(app):
                     db.session.rollback()
 
                 # platform_events telemetry table
+                # Note: SERIAL and TIMESTAMP are PostgreSQL syntax (not SQLite)
                 try:
                     conn.execute(text("""
                         CREATE TABLE IF NOT EXISTS platform_events (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            id SERIAL PRIMARY KEY,
                             event_type VARCHAR(100) NOT NULL,
                             entity_type VARCHAR(50),
                             entity_id INTEGER,
@@ -188,7 +189,7 @@ def run_migrations(app):
                             college_id INTEGER REFERENCES colleges(id),
                             extra_data JSON,
                             ip_address VARCHAR(50),
-                            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         )
                     """))
                     conn.execute(text('CREATE INDEX IF NOT EXISTS ix_platform_events_event_type ON platform_events (event_type)'))
@@ -203,14 +204,14 @@ def run_migrations(app):
                 try:
                     conn.execute(text('''
                         CREATE TABLE IF NOT EXISTS notifications (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            id SERIAL PRIMARY KEY,
                             user_id INTEGER NOT NULL REFERENCES users(id),
                             title VARCHAR(200) NOT NULL,
                             message TEXT NOT NULL,
                             type VARCHAR(50) DEFAULT 'INFO',
                             link VARCHAR(500),
-                            is_read BOOLEAN DEFAULT 0,
-                            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                            is_read BOOLEAN DEFAULT FALSE,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         )
                     '''))
                     conn.execute(text('CREATE INDEX IF NOT EXISTS ix_notifications_user_id ON notifications (user_id)'))
@@ -366,6 +367,10 @@ def create_app():
     app.register_blueprint(sc_bp, url_prefix='/api/sc')
     app.register_blueprint(feedback_bp, url_prefix='/api/feedback')
     app.register_blueprint(telemetry_bp, url_prefix='/api/telemetry')
+
+    @app.route('/')
+    def health_check():
+        return jsonify({"status": "ok", "message": "Event Hub API is running"}), 200
 
     @app.route('/uploads/<path:filename>')
     def uploaded_file(filename):
