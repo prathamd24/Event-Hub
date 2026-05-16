@@ -232,8 +232,87 @@ def get_recent_activity():
 @platform_admin_bp.route('/users', methods=['GET'])
 @role_required('PLATFORM_ADMIN')
 def get_users():
-    users = User.query.filter(User.role != 'PLATFORM_ADMIN').order_by(User.created_at.desc()).all()
-    return jsonify([u.to_dict() for u in users]), 200
+    """
+    Returns ALL users: DB users merged with Firebase-only users.
+    Firebase-only users (logged in but never completed registration) are
+    included with source='firebase_only' and flagged accordingly.
+    Also flags users missing college (except PLATFORM_ADMIN).
+    """
+    from firebase_admin import auth as firebase_auth
+
+    # ── 1. Get all DB users (excluding platform admin) ──────────────────
+    db_users = User.query.filter(User.role != 'PLATFORM_ADMIN').order_by(User.created_at.desc()).all()
+    db_by_email = {u.email.lower(): u for u in db_users}
+    db_by_uid   = {u.firebase_uid: u for u in db_users if u.firebase_uid}
+
+    result = []
+
+    # ── 2. Add all DB users with extra flags ────────────────────────────
+    for u in db_users:
+        d = u.to_dict()
+        d['source'] = 'database'
+        d['missingCollege'] = (
+            u.college_id is None
+            and not u.college_name_manual
+            and u.role not in ('PLATFORM_ADMIN',)
+        )
+        result.append(d)
+
+    # ── 3. Pull Firebase users and find orphans (not in DB) ─────────────
+    try:
+        firebase_emails_seen = set()
+        page = firebase_auth.list_users()
+        while page:
+            for fb_user in page.users:
+                email = (fb_user.email or '').lower()
+                uid   = fb_user.uid
+                firebase_emails_seen.add(email)
+
+                # Skip platform admin
+                if email == PLATFORM_ADMIN_EMAIL:
+                    continue
+
+                # Already in DB? Skip (already added above)
+                if email in db_by_email or uid in db_by_uid:
+                    continue
+
+                # Firebase-only user — never completed registration
+                result.append({
+                    'id': None,
+                    'firebaseUid': uid,
+                    'name': fb_user.display_name or '(No name)',
+                    'email': email,
+                    'role': 'UNREGISTERED',
+                    'collegeId': None,
+                    'collegeName': None,
+                    'isActive': not fb_user.disabled,
+                    'createdAt': fb_user.user_metadata.creation_timestamp
+                               and __import__('datetime').datetime.utcfromtimestamp(
+                                   fb_user.user_metadata.creation_timestamp / 1000
+                               ).isoformat(),
+                    'source': 'firebase_only',
+                    'missingCollege': True,
+                    'profilePic': fb_user.photo_url,
+                })
+
+            page = page.get_next_page()
+
+    except Exception as e:
+        print(f'[platform_admin/users] Firebase list error: {e}')
+        # Return DB users only if Firebase call fails
+        pass
+
+    # Sort: DB users first (by created_at desc), then Firebase-only
+    result.sort(key=lambda x: (x['source'] != 'database', x.get('createdAt') or ''), reverse=False)
+    # Stable sort: database first, within each group newest first
+    from functools import cmp_to_key
+    def sort_key(x):
+        order = 0 if x['source'] == 'database' else 1
+        ts = x.get('createdAt') or ''
+        return (order, [-ord(c) for c in ts])  # negate for desc within group
+
+    return jsonify(result), 200
+
 
 @platform_admin_bp.route('/users/<int:user_id>', methods=['DELETE'])
 @role_required('PLATFORM_ADMIN')
@@ -244,6 +323,19 @@ def delete_user(user_id):
     db.session.delete(user)
     db.session.commit()
     return jsonify({'message': 'User deleted'}), 200
+
+
+@platform_admin_bp.route('/users/firebase/<string:firebase_uid>', methods=['DELETE'])
+@role_required('PLATFORM_ADMIN')
+def delete_firebase_only_user(firebase_uid):
+    """Delete a Firebase-only user (not in DB) from Firebase Auth."""
+    from firebase_admin import auth as firebase_auth
+    try:
+        firebase_auth.delete_user(firebase_uid)
+        return jsonify({'message': 'Firebase user deleted'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 @platform_admin_bp.route('/users/<int:user_id>/toggle-active', methods=['PUT'])
 @role_required('PLATFORM_ADMIN')
