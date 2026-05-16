@@ -244,12 +244,7 @@ export default function RegisterPage() {
                             )}
                         </div>
 
-                        {/* Info box for institutional email users */}
-                        <div className="mb-5 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
-                            <p className="text-blue-300 text-xs font-medium">
-                                💡 <strong>Using a college email?</strong> Your college will be auto-detected from your email domain when you sign in with Google.
-                            </p>
-                        </div>
+
 
                         {/* Google Register Button */}
                         <button
